@@ -22,6 +22,26 @@ int CharType::compare(const Value &left, const Value &right) const
       (void *)left.value_.pointer_value_, left.length_, (void *)right.value_.pointer_value_, right.length_);
 }
 
+RC CharType::max(const Value &left, const Value &right, Value &result) const{
+  string const left_str = left.get_string(), right_str = right.get_string();
+  if (compare(left, right) >= 0) {
+    result.set_string(left_str.c_str());
+  } else {
+    result.set_string(right_str.c_str());
+  }
+  return RC::SUCCESS;
+}
+
+RC CharType::min(const Value &left, const Value &right, Value &result) const{
+  string const left_str = left.get_string(), right_str = right.get_string();
+  if (compare(left, right) < 0) {
+    result.set_string(left_str.c_str());
+  } else {
+    result.set_string(right_str.c_str());
+  }
+  return RC::SUCCESS;
+}
+
 RC CharType::set_value_from_str(Value &val, const string &data) const
 {
   val.set_string(data.c_str());

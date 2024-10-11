@@ -28,6 +28,21 @@ int IntegerType::compare(const Value &left, const Value &right) const
   return INT32_MAX;
 }
 
+RC IntegerType::max(const Value &left, const Value &right, Value &result) const{
+  result.set_int((left.get_int() > right.get_int())? left.get_int():right.get_int());
+  return RC::SUCCESS;
+}
+
+RC IntegerType::min(const Value &left, const Value &right, Value &result) const{
+  result.set_int((left.get_int() < right.get_int())? left.get_int():right.get_int());
+  return RC::SUCCESS;
+}
+
+RC IntegerType::count(const int num, Value &result) const{
+  result.set_int(num);
+  return RC::SUCCESS;
+}
+
 RC IntegerType::add(const Value &left, const Value &right, Value &result) const
 {
   result.set_int(left.get_int() + right.get_int());

@@ -25,6 +25,22 @@ int FloatType::compare(const Value &left, const Value &right) const
   return common::compare_float((void *)&left_val, (void *)&right_val);
 }
 
+RC FloatType::max(const Value &left, const Value &right, Value &result) const{
+  result.set_float((left.get_float() > right.get_float())? left.get_float():right.get_float());
+  return RC::SUCCESS;
+}
+
+RC FloatType::min(const Value &left, const Value &right, Value &result) const{
+  result.set_float((left.get_float() < right.get_float())? left.get_float():right.get_float());
+  return RC::SUCCESS;
+}
+
+RC FloatType::avg(const Value &left, const int num,  const Value &right, Value &result) const{
+  float totalSum = right.get_float() * num + left.get_float();
+  result.set_float(totalSum / (num + 1));
+  return RC::SUCCESS;
+}
+
 RC FloatType::add(const Value &left, const Value &right, Value &result) const
 {
   result.set_float(left.get_float() + right.get_float());

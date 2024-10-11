@@ -24,6 +24,10 @@ public:
 
   virtual ~CharType() = default;
 
+  RC max(const Value &left, const Value &right, Value &result) const override;
+
+  RC min(const Value &left, const Value &right, Value &result) const override;
+
   int compare(const Value &left, const Value &right) const override;
 
   RC cast_to(const Value &val, AttrType type, Value &result) const override;

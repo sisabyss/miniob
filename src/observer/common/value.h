@@ -58,6 +58,26 @@ public:
 
   void reset();
 
+  static RC max(const Value &left, const Value &right, Value &result)
+  {
+    return DataType::type_instance(result.attr_type())->max(left, right, result);
+  }
+
+  static RC min(const Value &left, const Value &right, Value &result)
+  {
+    return DataType::type_instance(result.attr_type())->min(left, right, result);
+  }
+
+  static RC avg(const Value &left, const int num, const Value &right, Value &result)
+  {
+    return DataType::type_instance(result.attr_type())->avg(left, num, right, result);
+  }
+
+  static RC count(const int num, Value &result)
+  {
+    return DataType::type_instance(AttrType::INTS)->count(num, result);
+  }
+
   static RC add(const Value &left, const Value &right, Value &result)
   {
     return DataType::type_instance(result.attr_type())->add(left, right, result);
