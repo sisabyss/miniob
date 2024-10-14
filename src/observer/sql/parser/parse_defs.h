@@ -76,6 +76,16 @@ struct ConditionSqlNode
 };
 
 /**
+ * @brief 表示表引用的集合
+ * @ingroup SQLParser
+ */
+struct TableRefSqlNode
+{
+  std::vector<std::string>                 relations;    ///< 查询的表
+  std::vector<ConditionSqlNode>            conditions;   ///< join on语句的查询条件
+};
+
+/**
  * @brief 描述一个select语句
  * @ingroup SQLParser
  * @details 一个正常的select语句描述起来比这个要复杂很多，这里做了简化。

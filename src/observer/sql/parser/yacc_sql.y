@@ -117,6 +117,8 @@ UnboundAggregateExpr *create_aggregate_expression(const char *aggregate_name,
         SUM
         AVG
         COUNT
+        INNER
+        JOIN
 
 /** union 中定义各种数据类型，真实生成的代码也是union类型，所以不能有非POD类型的数据 **/
 %union {
@@ -132,7 +134,7 @@ UnboundAggregateExpr *create_aggregate_expression(const char *aggregate_name,
   std::vector<Value> *                       value_list;
   std::vector<ConditionSqlNode> *            condition_list;
   std::vector<RelAttrSqlNode> *              rel_attr_list;
-  std::vector<std::string> *                 relation_list;
+  TableRefSqlNode *                          table_ref_list;
   char *                                     string;
   int                                        number;
   float                                      floats;
@@ -158,7 +160,9 @@ UnboundAggregateExpr *create_aggregate_expression(const char *aggregate_name,
 %type <condition_list>      where
 %type <condition_list>      condition_list
 %type <string>              storage_format
-%type <relation_list>       rel_list
+%type <table_ref_list>      table_ref_list
+%type <table_ref_list>      comma_ref_list
+%type <table_ref_list>      join_ref_list
 %type <expression>          expression
 %type <expression_list>     expression_list
 %type <expression_list>     group_by
@@ -454,7 +458,7 @@ update_stmt:      /*  update 语句的语法解析树*/
     }
     ;
 select_stmt:        /*  select 语句的语法解析树*/
-    SELECT expression_list FROM rel_list where group_by
+    SELECT expression_list FROM table_ref_list where group_by
     {
       $$ = new ParsedSqlNode(SCF_SELECT);
       if ($2 != nullptr) {
@@ -463,12 +467,13 @@ select_stmt:        /*  select 语句的语法解析树*/
       }
 
       if ($4 != nullptr) {
-        $$->selection.relations.swap(*$4);
+        $$->selection.relations.swap($4->relations);
+        $$->selection.conditions.swap($4->conditions);
         delete $4;
       }
 
       if ($5 != nullptr) {
-        $$->selection.conditions.swap(*$5);
+        $$->selection.conditions.insert($$->selection.conditions.end(), $5->begin(), $5->end());
         delete $5;
       }
 
@@ -599,21 +604,62 @@ relation:
       $$ = $1;
     }
     ;
-rel_list:
+table_ref_list:
+    comma_ref_list {  // 返回逗号连接的表列表
+      $$ = $1;
+    }
+    | join_ref_list { // 返回 INNER JOIN 的表列表
+      $$ = $1;
+    }
+    ;
+comma_ref_list:
     relation {
-      $$ = new std::vector<std::string>();
-      $$->push_back($1);
+      $$ = new TableRefSqlNode();
+      $$->relations.push_back($1);
       free($1);
     }
-    | relation COMMA rel_list {
+    | relation COMMA table_ref_list {
       if ($3 != nullptr) {
         $$ = $3;
       } else {
-        $$ = new std::vector<std::string>;
+        $$ = new TableRefSqlNode();
       }
 
-      $$->insert($$->begin(), $1);
+      $$->relations.insert($$->relations.begin(), $1);
       free($1);
+    }
+    ;
+join_ref_list:
+    relation INNER JOIN relation ON condition_list {
+      $$ = new TableRefSqlNode();
+
+      $$->relations.push_back($1);  // 左侧的relation
+      $$->relations.push_back($4);  // 右侧的relation
+      free($1);
+      free($4);
+
+      // 将ON条件存储为 conditions
+      if ($6 != nullptr) {
+        $$->conditions.insert($$->conditions.end(), $6->begin(), $6->end());
+        delete $6;
+      }
+    }
+    | join_ref_list INNER JOIN relation ON condition_list {
+      // 处理嵌套的 INNER JOIN
+      if ($1 != nullptr) {
+        $$ = $1;  // 左侧的rel_list
+      } else {
+        $$ = new TableRefSqlNode();
+      }
+
+      $$->relations.push_back($4);  // 右侧的relation
+      free($4);
+
+      // 将ON条件存储为 conditions
+      if ($6 != nullptr) {
+        $$->conditions.insert($$->conditions.end(), $6->begin(), $6->end());
+        delete $6;
+      }
     }
     ;
 

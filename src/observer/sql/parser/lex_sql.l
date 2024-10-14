@@ -86,6 +86,8 @@ MIN                                     RETURN_TOKEN(MIN);
 SUM                                     RETURN_TOKEN(SUM);
 AVG                                     RETURN_TOKEN(AVG);
 COUNT                                   RETURN_TOKEN(COUNT);
+INNER                                   RETURN_TOKEN(INNER);
+JOIN                                    RETURN_TOKEN(JOIN);
 {DOT}                                   RETURN_TOKEN(DOT);
 EXIT                                    RETURN_TOKEN(EXIT);
 HELP                                    RETURN_TOKEN(HELP);
