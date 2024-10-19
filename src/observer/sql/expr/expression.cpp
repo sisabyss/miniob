@@ -13,8 +13,12 @@ See the Mulan PSL v2 for more details. */
 //
 
 #include "sql/expr/expression.h"
+#include "common/like.h"
+#include "common/log/log.h"
+#include "common/type/attr_type.h"
 #include "sql/expr/tuple.h"
 #include "sql/expr/arithmetic_operator.hpp"
+#include "sql/parser/parse_defs.h"
 
 using namespace std;
 
@@ -121,6 +125,30 @@ ComparisonExpr::~ComparisonExpr() {}
 RC ComparisonExpr::compare_value(const Value &left, const Value &right, bool &result) const
 {
   RC  rc         = RC::SUCCESS;
+
+  // LIKE and NOT LIKE Expression
+  if (comp() == LIKE_OP || comp() == NO_LIKE_OP) {
+      auto left_type = left.attr_type();
+      auto right_type = right.attr_type();
+
+      // Check if both operands are of CHARS type
+      if (left_type != AttrType::CHARS || right_type != AttrType::CHARS) {
+          LOG_WARN("LIKE and NOT LIKE operations require both operands to be of CHARS type. "
+                    "Received left operand type: %s, right operand type: %s.",
+                    attr_type_to_string(left_type),
+                    attr_type_to_string(right_type));
+          return RC::INVALID_ARGUMENT;
+      }
+
+      // Evaluate LIKE/NOT LIKE expression
+      result = is_like(left.get_string().data(), right.get_string().data());
+      if (comp() == NO_LIKE_OP) {
+          result = !result; // Negate result for NOT LIKE
+      }
+
+      return RC::SUCCESS;
+  }
+
   int cmp_result = left.compare(right);
   result         = false;
   switch (comp_) {
