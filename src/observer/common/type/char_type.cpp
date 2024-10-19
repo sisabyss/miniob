@@ -8,6 +8,7 @@ EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
 MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
 See the Mulan PSL v2 for more details. */
 
+#include "common/cast.hpp"
 #include "common/lang/comparator.h"
 #include "common/lang/exception.h"
 #include "common/log/log.h"
@@ -51,6 +52,12 @@ RC CharType::set_value_from_str(Value &val, const string &data) const
 RC CharType::cast_to(const Value &val, AttrType type, Value &result) const
 {
   switch (type) {
+    case AttrType::INTS: {
+      result.set_int(str2int(val.get_string().data()));
+    } break;
+    case AttrType::FLOATS: {
+      result.set_float(str2float(val.get_string().data()));
+    } break;
     case AttrType::DATES: {
       try {
         result.set_date(Date::from_string(val.get_string()));
@@ -69,8 +76,14 @@ int CharType::cast_cost(AttrType type)
   if (type == AttrType::CHARS) {
     return 0;
   }
-  if (type == AttrType::DATES) {
+  if (type == AttrType::INTS) {
     return 1;
+  }
+  if (type == AttrType::FLOATS) {
+    return 2;
+  }
+  if (type == AttrType::DATES) {
+    return 3;
   }
   return INT32_MAX;
 }

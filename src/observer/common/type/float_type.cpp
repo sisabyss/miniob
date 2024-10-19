@@ -80,12 +80,15 @@ int FloatType::cast_cost(AttrType type)
   if (type == AttrType::FLOATS) {
     return 0;
   }
+  /*
   if (type == AttrType::CHARS) {
     return 2;
   }
+  */
   return INT32_MAX;
 }
 
+/*
 RC FloatType::cast_to(const Value &val, AttrType type, Value &result) const
 {
   switch (type) {
@@ -97,6 +100,7 @@ RC FloatType::cast_to(const Value &val, AttrType type, Value &result) const
   }
   return RC::SUCCESS;
 }
+*/
 
 RC FloatType::set_value_from_str(Value &val, const string &data) const
 {
