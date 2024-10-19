@@ -75,6 +75,29 @@ RC FloatType::negative(const Value &val, Value &result) const
   return RC::SUCCESS;
 }
 
+int FloatType::cast_cost(AttrType type)
+{
+  if (type == AttrType::FLOATS) {
+    return 0;
+  }
+  if (type == AttrType::CHARS) {
+    return 2;
+  }
+  return INT32_MAX;
+}
+
+RC FloatType::cast_to(const Value &val, AttrType type, Value &result) const
+{
+  switch (type) {
+    case AttrType::CHARS: {
+      std::string tmp_str = std::to_string(val.get_float());
+      result.set_string(tmp_str.data());
+    } break;
+    default: return RC::UNIMPLEMENTED;
+  }
+  return RC::SUCCESS;
+}
+
 RC FloatType::set_value_from_str(Value &val, const string &data) const
 {
   RC                rc = RC::SUCCESS;
