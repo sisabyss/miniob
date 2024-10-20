@@ -136,9 +136,11 @@ UnboundAggregateExpr *create_aggregate_expression(const char *aggregate_name,
   std::vector<ConditionSqlNode> *            condition_list;
   std::vector<RelAttrSqlNode> *              rel_attr_list;
   TableRefSqlNode *                          table_ref_list;
+  std::vector<std::string> *                 id_list;
   char *                                     string;
   int                                        number;
   float                                      floats;
+  bool                                       bools;
 }
 
 %token <number> NUMBER
@@ -167,6 +169,8 @@ UnboundAggregateExpr *create_aggregate_expression(const char *aggregate_name,
 %type <expression>          expression
 %type <expression_list>     expression_list
 %type <expression_list>     group_by
+%type <bools>               opt_unique
+%type <id_list>             ID_list;
 %type <sql_node>            calc_stmt
 %type <sql_node>            select_stmt
 %type <sql_node>            insert_stmt
@@ -283,29 +287,44 @@ desc_table_stmt:
     ;
 
 create_index_stmt:    /*create index 语句的语法解析树*/
-    CREATE INDEX ID ON ID LBRACE ID RBRACE
+    CREATE opt_unique INDEX ID ON ID LBRACE ID_list RBRACE
     {
       $$ = new ParsedSqlNode(SCF_CREATE_INDEX);
       CreateIndexSqlNode &create_index = $$->create_index;
-      create_index.index_name = $3;
-      create_index.relation_name = $5;
-      create_index.attribute_name = $7;
-      create_index.unique = false;
-      free($3);
-      free($5);
-      free($7);
-    }
-    | CREATE UNIQUE INDEX ID ON ID LBRACE ID RBRACE
-    {
-      $$ = new ParsedSqlNode(SCF_CREATE_INDEX);
-      CreateIndexSqlNode &create_index = $$->create_index;
+      create_index.unique = $2;
       create_index.index_name = $4;
       create_index.relation_name = $6;
-      create_index.attribute_name = $8;
-      create_index.unique = true;
+      create_index.attribute_names.swap(*$8);
       free($4);
       free($6);
-      free($8);
+      delete $8;
+    }
+    ;
+
+opt_unique:
+    {
+      $$ = false;
+    }
+    | UNIQUE {
+      $$ = true;
+    }
+
+ID_list:
+    ID
+    {
+      $$ = new std::vector<std::string>;
+      $$->emplace_back($1);
+      free($1);
+    }
+    | ID COMMA ID_list
+    {
+      if ($3 != nullptr) {
+        $$ = $3;
+      } else {
+        $$ = new std::vector<std::string>;
+      }
+      $$->emplace($$->begin(), $1);
+      free($1);
     }
     ;
 
