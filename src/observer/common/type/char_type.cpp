@@ -60,7 +60,8 @@ RC CharType::cast_to(const Value &val, AttrType type, Value &result) const
     } break;
     case AttrType::DATES: {
       try {
-        result.set_date(Date::from_string(val.get_string()));
+        Date d = Date::from_string(val.get_string());
+        result.set_date(d);
       } catch (exception const &ex) {
         LOG_WARN("fail to cast value. ex: %s", ex.what());
         return RC::VARIABLE_NOT_VALID;

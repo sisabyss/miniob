@@ -51,7 +51,8 @@ RC UpdateStmt::create(Db *db, const UpdateSqlNode &update, Stmt *&stmt)
   }
 
   if (field_meta->type() == update.value.attr_type()
-      || (field_meta->type() == AttrType::TEXTS && update.value.attr_type() == AttrType::CHARS)) {
+      || (field_meta->type() == AttrType::TEXTS && update.value.attr_type() == AttrType::CHARS)
+      || (field_meta->type() == AttrType::DATES && update.value.attr_type() == AttrType::CHARS)) {
     /* skip */
   } else {
     LOG_WARN("update value failed to cast into target type, src=%s, target=%s",

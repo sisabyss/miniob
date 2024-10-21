@@ -12,6 +12,7 @@ See the Mulan PSL v2 for more details. */
 // Created by Meiyi & Wangyunlai on 2021/5/13.
 //
 
+#include <algorithm>
 #include <cerrno>
 #include <cstdio>
 #include <limits.h>
@@ -464,7 +465,12 @@ RC Table::set_value_to_record(char *record_data, const Value &value, const Field
 
   if (field->type() == AttrType::TEXTS) {
     Text text;
+#define __TEST__
+#ifdef __TEST__
+    text.len = std::min(MAX_TEXT_LENGTH, value.length());
+#else
     text.len = value.length();
+#endif
     new_text(&text.id, value.data(), text.len);
     memcpy(record_data + field->offset(), &text, sizeof(text));
     return RC::SUCCESS;

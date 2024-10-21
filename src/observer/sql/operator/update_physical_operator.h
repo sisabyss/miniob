@@ -34,6 +34,8 @@ public:
   RC close() override;
   Tuple *current_tuple() override { return nullptr; }
 
+private:
+  RC set_value_to_record(char *record_data, const Value &value, const FieldMeta *field) const;
 
 private:
   Table              *table_ = nullptr;

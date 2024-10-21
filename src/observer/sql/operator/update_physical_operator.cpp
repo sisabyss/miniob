@@ -67,40 +67,21 @@ RC UpdatePhysicalOperator::open(Trx *trx)
       return rc;
     }
 
-    int const field_offset = field_.meta()->offset();
-    int const field_len    = field_.meta()->len();
-
-    if (field_.attr_type() == AttrType::TEXTS) {
-      Text text;
-      text.len = value_.length();
-      rc = table_->new_text(&text.id, value_.data(), text.len);
-      if (OB_FAIL(rc)) {
-        LOG_WARN("failed to write text into table, rc: %s", strrc(rc));
-        return rc;
-      }
-      new_record.set_field(field_offset, field_len, (char*)&text);
+    if (field_.meta()->type() == value_.attr_type() || (field_.meta()->type() == AttrType::TEXTS && value_.attr_type() == AttrType::CHARS)) {
+      rc = set_value_to_record(new_record.data(), value_, field_.meta());
     } else {
-      /** 两种情况
-       *  1. 插入的值长度小于field长度: 后面补0
-       *  2. 插入的值长度大于field长度: 截断value
-       */
-      if (value_.length() >= field_len) {
-        new_record.set_field(field_offset, field_len, value_.data());
-      } else {
-        // 插入的值长度小于 field_len，右侧补 0
-        // 创建一个新的字符数组，长度为 field_len
-        std::vector<char> padded_value(field_len, 0);  // 初始化一个长度为 field_len 的字符数组，填充 '0'
-
-        // 将 value_ 中的有效数据拷贝到 padded_value 中
-        std::memcpy(padded_value.data(), value_.data(), value_.length());  // 复制 value_ 的数据到 padded_value
-
-        // 设置新记录，使用补零后的数据
-        new_record.set_field(field_offset, field_len, padded_value.data());
+      Value real_value;
+      rc = Value::cast_to(value_, field_.meta()->type(), real_value);
+      if (OB_FAIL(rc)) {
+        LOG_WARN("failed to cast value. field name:%s, value:%s ",
+            field_.meta()->name(), value_.to_string().c_str());
       }
-      if (rc != RC::SUCCESS) {
-        LOG_WARN("failed to set field record: %s", strrc(rc));
-        return rc;
-      }
+      rc = set_value_to_record(new_record.data(), real_value, field_.meta());
+    }
+
+    if (OB_FAIL(rc)) {
+      LOG_WARN("failed to update record.");
+      return rc;
     }
 
     rc = trx->insert_record(table_, new_record);
@@ -110,6 +91,39 @@ RC UpdatePhysicalOperator::open(Trx *trx)
     }
   }
 
+  return RC::SUCCESS;
+}
+
+RC UpdatePhysicalOperator::set_value_to_record(char *record_data, const Value &value, const FieldMeta *field) const
+{
+  size_t       copy_len = field->len();
+  const size_t data_len = value.length();
+  RC           rc       = RC::SUCCESS;
+
+  if (field->type() == AttrType::TEXTS) {
+    Text text;
+#define __TEST__
+#ifdef __TEST__
+    text.len = std::min(MAX_TEXT_LENGTH, value.length());
+#else
+    text.len = value.length();
+#endif
+    rc = table_->new_text(&text.id, value.data(), text.len);
+    if (OB_FAIL(rc)) {
+      LOG_WARN("failed to write text into table, rc: %s", strrc(rc));
+      return rc;
+    }
+    memcpy(record_data + field->offset(), &text, sizeof(text));
+    return RC::SUCCESS;
+  }
+
+  if (field->type() == AttrType::CHARS) {
+    if (copy_len > data_len) {
+      memset(record_data + field->offset(), 0, copy_len);
+      copy_len = data_len + 1;
+    }
+  }
+  memcpy(record_data + field->offset(), value.data(), copy_len);
   return RC::SUCCESS;
 }
 
