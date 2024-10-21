@@ -26,6 +26,15 @@ static constexpr PageNum BP_HEADER_PAGE = 0;
 static constexpr const int BP_PAGE_SIZE      = (1 << 13); /* 8kb */
 static constexpr const int BP_PAGE_DATA_SIZE = (BP_PAGE_SIZE - sizeof(PageNum) - sizeof(LSN) - sizeof(CheckSum));
 
+/////////////////////////////////////////////////
+// Text Buffer Pool
+/////////////////////////////////////////////////
+static constexpr PageNum TP_INVALID_PAGE_NUM = -1;
+
+static constexpr PageNum TP_HEADER_PAGE = 0;
+
+static constexpr const int TP_PAGE_SIZE      = (1 << 13); /* 8kb */
+
 /**
  * @brief 表示一个页面，可能放在内存或磁盘上
  * @ingroup BufferPool
@@ -35,4 +44,13 @@ struct Page
   LSN      lsn;
   CheckSum check_sum;
   char     data[BP_PAGE_DATA_SIZE];
+};
+
+/**
+ * @brief 表示一个文本页面，可能放在内存或磁盘上
+ * @ingroup BufferPool
+ */
+struct TextPage
+{
+  char     data[TP_PAGE_SIZE];
 };
