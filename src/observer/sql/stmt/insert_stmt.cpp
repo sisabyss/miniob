@@ -14,7 +14,10 @@ See the Mulan PSL v2 for more details. */
 
 #include "sql/stmt/insert_stmt.h"
 #include "common/log/log.h"
+#include "common/text.hpp"
+#include "common/type/attr_type.h"
 #include "storage/db/db.h"
+#include "storage/field/field_meta.h"
 #include "storage/table/table.h"
 
 InsertStmt::InsertStmt(Table *table, const Value *values, int value_amount)
@@ -38,13 +41,34 @@ RC InsertStmt::create(Db *db, const InsertSqlNode &inserts, Stmt *&stmt)
   }
 
   // check the fields number
-  const Value     *values     = inserts.values.data();
-  const int        value_num  = static_cast<int>(inserts.values.size());
-  const TableMeta &table_meta = table->table_meta();
-  const int        field_num  = table_meta.field_num() - table_meta.sys_field_num();
+  const Value     *values        = inserts.values.data();
+  const int        value_num     = static_cast<int>(inserts.values.size());
+  const TableMeta &table_meta    = table->table_meta();
+  const int        field_num     = table_meta.field_num() - table_meta.sys_field_num();
+  const int        sys_field_num = table_meta.sys_field_num();
+
   if (field_num != value_num) {
     LOG_WARN("schema mismatch. value num=%d, field num in schema=%d", value_num, field_num);
     return RC::SCHEMA_FIELD_MISSING;
+  }
+
+  // check field type
+  for (int i = 0; i < value_num; ++i) {
+    const FieldMeta *field_meta = table_meta.field(i + sys_field_num);
+    const AttrType field_type = field_meta->type();
+    const AttrType value_type = values[i].attr_type();
+
+    if (field_type == AttrType::TEXTS) {
+      if (value_type != AttrType::CHARS) {
+        LOG_WARN("insert text field only support chars type");
+        return RC::INVALID_ARGUMENT;
+      }
+
+      if (values[i].length() > MAX_TEXT_LENGTH) {
+        LOG_WARN("text overflow, length %d over max_length 65535", values[i].length());
+        return RC::INVALID_ARGUMENT;
+      }
+    }
   }
 
   // everything alright

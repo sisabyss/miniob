@@ -18,10 +18,13 @@ See the Mulan PSL v2 for more details. */
 #include "common/types.h"
 #include "common/lang/span.h"
 #include "common/lang/functional.h"
+#include <cstdint>
 
 struct RID;
 class Record;
 class DiskBufferPool;
+using text_t = size_t;
+class TextBufferPool;
 class RecordFileHandler;
 class RecordFileScanner;
 class ChunkFileScanner;
@@ -55,6 +58,14 @@ public:
       span<const AttrInfoSqlNode> attributes, StorageFormat storage_format);
 
   /**
+   * 删除一个表
+   * @param path 元数据保存的文件(完整路径)
+   * @param name 表名
+   * @param base_dir 表数据存放的路径
+   */
+   RC drop(Db *db, const char *path, const char *name, const char *base_dir);
+
+  /**
    * 打开一个表
    * @param meta_file 保存表元数据的文件完整路径
    * @param base_dir 表所在的文件夹，表记录数据文件、索引数据文件存放位置
@@ -80,10 +91,16 @@ public:
   RC delete_record(const RID &rid);
   RC get_record(const RID &rid, Record &record);
 
+  /**
+   * @brief 在当前的表中插入一条超长文本
+   */
+  RC new_text(text_t *id, const void *__restrict src, const int length);
+  RC load_text(const text_t id, void *__restrict dst, const int length) const;
+
   RC recover_insert_record(Record &record);
 
   // TODO refactor
-  RC create_index(Trx *trx, const FieldMeta *field_meta, const char *index_name);
+  RC create_index(Trx *trx, const FieldMeta *field_meta, const char *index_name, bool unique);
 
   RC get_record_scanner(RecordFileScanner &scanner, Trx *trx, ReadWriteMode mode);
 
@@ -117,6 +134,7 @@ private:
 
 private:
   RC init_record_handler(const char *base_dir);
+  RC init_text_handler(const char *base_dir);
 
 public:
   Index *find_index(const char *index_name) const;
@@ -127,6 +145,7 @@ private:
   string             base_dir_;
   TableMeta          table_meta_;
   DiskBufferPool    *data_buffer_pool_ = nullptr;  /// 数据文件关联的buffer pool
+  TextBufferPool    *text_buffer_pool_ = nullptr;  /// text文件关联的buffer pool
   RecordFileHandler *record_handler_   = nullptr;  /// 记录操作
   vector<Index *>    indexes_;
 };

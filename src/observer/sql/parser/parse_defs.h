@@ -51,6 +51,8 @@ enum CompOp
   LESS_THAN,    ///< "<"
   GREAT_EQUAL,  ///< ">="
   GREAT_THAN,   ///< ">"
+  LIKE_OP,      ///< "LIKE"
+  NO_LIKE_OP,   ///< "LIKE"
   NO_OP
 };
 
@@ -64,7 +66,7 @@ enum CompOp
  */
 struct ConditionSqlNode
 {
-  int left_is_attr;              ///< TRUE if left-hand side is an attribute
+  int            left_is_attr;   ///< TRUE if left-hand side is an attribute
                                  ///< 1时，操作符左边是属性名，0时，是属性值
   Value          left_value;     ///< left-hand side value if left_is_attr = FALSE
   RelAttrSqlNode left_attr;      ///< left-hand side attribute
@@ -73,6 +75,16 @@ struct ConditionSqlNode
                                  ///< 1时，操作符右边是属性名，0时，是属性值
   RelAttrSqlNode right_attr;     ///< right-hand side attribute if right_is_attr = TRUE 右边的属性
   Value          right_value;    ///< right-hand side value if right_is_attr = FALSE
+};
+
+/**
+ * @brief 表示表引用的集合
+ * @ingroup SQLParser
+ */
+struct TableRefSqlNode
+{
+  std::vector<std::string>                 relations;    ///< 查询的表
+  std::vector<ConditionSqlNode>            conditions;   ///< join on语句的查询条件
 };
 
 /**
@@ -177,9 +189,10 @@ struct DropTableSqlNode
  */
 struct CreateIndexSqlNode
 {
-  std::string index_name;      ///< Index name
-  std::string relation_name;   ///< Relation name
-  std::string attribute_name;  ///< Attribute name
+  std::string              index_name;      ///< Index name
+  std::string              relation_name;   ///< Relation name
+  std::vector<std::string> attribute_names; ///< Attribute name
+  bool                     unique;          ///< 支持unique index语句
 };
 
 /**

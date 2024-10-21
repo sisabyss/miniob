@@ -14,10 +14,14 @@ See the Mulan PSL v2 for more details. */
 
 #pragma once
 
+#include "common/date.h"
 #include "common/lang/string.h"
 #include "common/lang/memory.h"
+#include "common/text.hpp"
 #include "common/type/attr_type.h"
 #include "common/type/data_type.h"
+#include "common/type/date_type.h"
+#include <cstdint>
 
 /**
  * @brief 属性的值
@@ -34,6 +38,7 @@ public:
   friend class FloatType;
   friend class BooleanType;
   friend class CharType;
+  friend class DateType;
 
   Value() = default;
 
@@ -53,6 +58,26 @@ public:
   Value &operator=(Value &&other);
 
   void reset();
+
+  static RC max(const Value &left, const Value &right, Value &result)
+  {
+    return DataType::type_instance(result.attr_type())->max(left, right, result);
+  }
+
+  static RC min(const Value &left, const Value &right, Value &result)
+  {
+    return DataType::type_instance(result.attr_type())->min(left, right, result);
+  }
+
+  static RC avg(const Value &left, const int num, const Value &right, Value &result)
+  {
+    return DataType::type_instance(result.attr_type())->avg(left, num, right, result);
+  }
+
+  static RC count(const int num, Value &result)
+  {
+    return DataType::type_instance(AttrType::INTS)->count(num, result);
+  }
 
   static RC add(const Value &left, const Value &right, Value &result)
   {
@@ -108,11 +133,14 @@ public:
   float  get_float() const;
   string get_string() const;
   bool   get_boolean() const;
+  Date   get_date() const;
 
 private:
   void set_int(int val);
   void set_float(float val);
   void set_string(const char *s, int len = 0);
+  void set_date(const uint16_t year, const uint8_t month, const uint8_t day);
+  void set_date(const Date &val);
   void set_string_from_other(const Value &other);
 
 private:
@@ -121,10 +149,12 @@ private:
 
   union Val
   {
-    int32_t int_value_;
-    float   float_value_;
-    bool    bool_value_;
-    char   *pointer_value_;
+    int32_t      int_value_;
+    float        float_value_;
+    bool         bool_value_;
+    char        *pointer_value_;
+    Date         date_value_;
+    Text         text_value_;
   } value_ = {.int_value_ = 0};
 
   /// 是否申请并占有内存, 目前对于 CHARS 类型 own_data_ 为true, 其余类型 own_data_ 为false

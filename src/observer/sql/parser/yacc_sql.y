@@ -89,6 +89,8 @@ UnboundAggregateExpr *create_aggregate_expression(const char *aggregate_name,
         INT_T
         STRING_T
         FLOAT_T
+        DATE_T
+        TEXT_T
         HELP
         EXIT
         DOT //QUOTE
@@ -111,6 +113,16 @@ UnboundAggregateExpr *create_aggregate_expression(const char *aggregate_name,
         LE
         GE
         NE
+        MAX
+        MIN
+        SUM
+        AVG
+        COUNT
+        INNER
+        JOIN
+        UNIQUE
+        NOT
+        LIKE
 
 /** union 中定义各种数据类型，真实生成的代码也是union类型，所以不能有非POD类型的数据 **/
 %union {
@@ -126,10 +138,12 @@ UnboundAggregateExpr *create_aggregate_expression(const char *aggregate_name,
   std::vector<Value> *                       value_list;
   std::vector<ConditionSqlNode> *            condition_list;
   std::vector<RelAttrSqlNode> *              rel_attr_list;
-  std::vector<std::string> *                 relation_list;
+  TableRefSqlNode *                          table_ref_list;
+  std::vector<std::string> *                 id_list;
   char *                                     string;
   int                                        number;
   float                                      floats;
+  bool                                       bools;
 }
 
 %token <number> NUMBER
@@ -152,10 +166,14 @@ UnboundAggregateExpr *create_aggregate_expression(const char *aggregate_name,
 %type <condition_list>      where
 %type <condition_list>      condition_list
 %type <string>              storage_format
-%type <relation_list>       rel_list
+%type <table_ref_list>      table_ref_list
+%type <table_ref_list>      comma_ref_list
+%type <table_ref_list>      join_ref_list
 %type <expression>          expression
 %type <expression_list>     expression_list
 %type <expression_list>     group_by
+%type <bools>               opt_unique
+%type <id_list>             ID_list;
 %type <sql_node>            calc_stmt
 %type <sql_node>            select_stmt
 %type <sql_node>            insert_stmt
@@ -272,16 +290,44 @@ desc_table_stmt:
     ;
 
 create_index_stmt:    /*create index 语句的语法解析树*/
-    CREATE INDEX ID ON ID LBRACE ID RBRACE
+    CREATE opt_unique INDEX ID ON ID LBRACE ID_list RBRACE
     {
       $$ = new ParsedSqlNode(SCF_CREATE_INDEX);
       CreateIndexSqlNode &create_index = $$->create_index;
-      create_index.index_name = $3;
-      create_index.relation_name = $5;
-      create_index.attribute_name = $7;
-      free($3);
-      free($5);
-      free($7);
+      create_index.unique = $2;
+      create_index.index_name = $4;
+      create_index.relation_name = $6;
+      create_index.attribute_names.swap(*$8);
+      free($4);
+      free($6);
+      delete $8;
+    }
+    ;
+
+opt_unique:
+    {
+      $$ = false;
+    }
+    | UNIQUE {
+      $$ = true;
+    }
+
+ID_list:
+    ID
+    {
+      $$ = new std::vector<std::string>;
+      $$->emplace_back($1);
+      free($1);
+    }
+    | ID COMMA ID_list
+    {
+      if ($3 != nullptr) {
+        $$ = $3;
+      } else {
+        $$ = new std::vector<std::string>;
+      }
+      $$->emplace($$->begin(), $1);
+      free($1);
     }
     ;
 
@@ -349,7 +395,20 @@ attr_def:
       $$ = new AttrInfoSqlNode;
       $$->type = (AttrType)$2;
       $$->name = $1;
-      $$->length = 4;
+      switch($$->type) {
+        case AttrType::INTS:
+        case AttrType::CHARS:
+        case AttrType::FLOATS:
+        case AttrType::DATES: {
+          $$->length = 4;
+        } break;
+        case AttrType::TEXTS: {
+          $$->length = 16;
+        } break;
+        default: {
+          $$->length = 4;
+        } break;
+      }
       free($1);
     }
     ;
@@ -360,6 +419,8 @@ type:
     INT_T      { $$ = static_cast<int>(AttrType::INTS); }
     | STRING_T { $$ = static_cast<int>(AttrType::CHARS); }
     | FLOAT_T  { $$ = static_cast<int>(AttrType::FLOATS); }
+    | DATE_T  { $$ = static_cast<int>(AttrType::DATES); }
+    | TEXT_T { $$ = static_cast<int>(AttrType::TEXTS); }
     ;
 insert_stmt:        /*insert   语句的语法解析树*/
     INSERT INTO ID VALUES LBRACE value value_list RBRACE 
@@ -444,10 +505,11 @@ update_stmt:      /*  update 语句的语法解析树*/
       }
       free($2);
       free($4);
+      delete $6;
     }
     ;
 select_stmt:        /*  select 语句的语法解析树*/
-    SELECT expression_list FROM rel_list where group_by
+    SELECT expression_list FROM table_ref_list where group_by
     {
       $$ = new ParsedSqlNode(SCF_SELECT);
       if ($2 != nullptr) {
@@ -456,12 +518,13 @@ select_stmt:        /*  select 语句的语法解析树*/
       }
 
       if ($4 != nullptr) {
-        $$->selection.relations.swap(*$4);
+        $$->selection.relations.swap($4->relations);
+        $$->selection.conditions.swap($4->conditions);
         delete $4;
       }
 
       if ($5 != nullptr) {
-        $$->selection.conditions.swap(*$5);
+        $$->selection.conditions.insert($$->selection.conditions.end(), $5->begin(), $5->end());
         delete $5;
       }
 
@@ -531,6 +594,45 @@ expression:
       $$ = new StarExpr();
     }
     // your code here
+    | MAX LBRACE expression RBRACE{
+      if($3 -> type() != ExprType::UNBOUND_FIELD){
+        delete $3;
+        yyerror (&yylloc, sql_string, sql_result, scanner, YY_("syntax error: can only support MAX(FIELD)"));
+        YYERROR;
+      }else{
+        $$ = create_aggregate_expression("MAX", $3, sql_string, &@$);
+      }
+    }
+    | MIN LBRACE expression RBRACE{
+      if($3 -> type() != ExprType::UNBOUND_FIELD){
+        delete $3;
+        yyerror (&yylloc, sql_string, sql_result, scanner, YY_("syntax error: can only support MIN(FIELD)"));
+        YYERROR;
+      }else{
+        $$ = create_aggregate_expression("MIN", $3, sql_string, &@$);
+      }
+    }
+    | SUM LBRACE expression RBRACE{
+      if($3 -> type() != ExprType::UNBOUND_FIELD){
+        delete $3;
+        yyerror (&yylloc, sql_string, sql_result, scanner, YY_("syntax error: can only support SUM(FIELD)"));
+        YYERROR;
+      }else{
+        $$ = create_aggregate_expression("SUM", $3, sql_string, &@$);
+      }
+    }
+    | AVG LBRACE expression RBRACE{
+      if($3 -> type() != ExprType::UNBOUND_FIELD){
+        delete $3;
+        yyerror (&yylloc, sql_string, sql_result, scanner, YY_("syntax error: can only support AVG(FIELD)"));
+        YYERROR;
+      }else{
+        $$ = create_aggregate_expression("AVG", $3, sql_string, &@$);
+      }
+    }
+    | COUNT LBRACE expression RBRACE{
+      $$ = create_aggregate_expression("COUNT", $3, sql_string, &@$);
+    }
     ;
 
 rel_attr:
@@ -553,21 +655,62 @@ relation:
       $$ = $1;
     }
     ;
-rel_list:
+table_ref_list:
+    comma_ref_list {  // 返回逗号连接的表列表
+      $$ = $1;
+    }
+    | join_ref_list { // 返回 INNER JOIN 的表列表
+      $$ = $1;
+    }
+    ;
+comma_ref_list:
     relation {
-      $$ = new std::vector<std::string>();
-      $$->push_back($1);
+      $$ = new TableRefSqlNode();
+      $$->relations.push_back($1);
       free($1);
     }
-    | relation COMMA rel_list {
+    | relation COMMA table_ref_list {
       if ($3 != nullptr) {
         $$ = $3;
       } else {
-        $$ = new std::vector<std::string>;
+        $$ = new TableRefSqlNode();
       }
 
-      $$->insert($$->begin(), $1);
+      $$->relations.insert($$->relations.begin(), $1);
       free($1);
+    }
+    ;
+join_ref_list:
+    relation INNER JOIN relation ON condition_list {
+      $$ = new TableRefSqlNode();
+
+      $$->relations.push_back($1);  // 左侧的relation
+      $$->relations.push_back($4);  // 右侧的relation
+      free($1);
+      free($4);
+
+      // 将ON条件存储为 conditions
+      if ($6 != nullptr) {
+        $$->conditions.insert($$->conditions.end(), $6->begin(), $6->end());
+        delete $6;
+      }
+    }
+    | join_ref_list INNER JOIN relation ON condition_list {
+      // 处理嵌套的 INNER JOIN
+      if ($1 != nullptr) {
+        $$ = $1;  // 左侧的rel_list
+      } else {
+        $$ = new TableRefSqlNode();
+      }
+
+      $$->relations.push_back($4);  // 右侧的relation
+      free($4);
+
+      // 将ON条件存储为 conditions
+      if ($6 != nullptr) {
+        $$->conditions.insert($$->conditions.end(), $6->begin(), $6->end());
+        delete $6;
+      }
     }
     ;
 
@@ -654,6 +797,8 @@ comp_op:
     | LE { $$ = LESS_EQUAL; }
     | GE { $$ = GREAT_EQUAL; }
     | NE { $$ = NOT_EQUAL; }
+    | LIKE { $$ = LIKE_OP; }
+    | NOT LIKE { $$ = NO_LIKE_OP; }
     ;
 
 // your code here
@@ -661,6 +806,10 @@ group_by:
     /* empty */
     {
       $$ = nullptr;
+    }
+    | GROUP BY expression_list
+    {
+        $$ = $3;
     }
     ;
 load_data_stmt:

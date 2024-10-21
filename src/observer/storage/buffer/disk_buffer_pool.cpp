@@ -11,6 +11,7 @@ See the Mulan PSL v2 for more details. */
 //
 // Created by Meiyi & Longda on 2021/4/13.
 //
+#include <ctime>
 #include <errno.h>
 #include <string.h>
 
@@ -20,7 +21,9 @@ See the Mulan PSL v2 for more details. */
 #include "common/log/log.h"
 #include "common/math/crc.h"
 #include "storage/buffer/disk_buffer_pool.h"
+#include "common/rc.h"
 #include "storage/buffer/buffer_pool_log.h"
+#include "storage/buffer/page.h"
 #include "storage/db/db.h"
 
 using namespace common;
@@ -30,6 +33,13 @@ static const int MEM_POOL_ITEM_NUM = 20;
 ////////////////////////////////////////////////////////////////////////////////
 
 string BPFileHeader::to_string() const
+{
+  stringstream ss;
+  ss << "pageCount:" << page_count << ", allocatedCount:" << allocated_pages;
+  return ss.str();
+}
+
+string TPFileHeader::to_string() const
 {
   stringstream ss;
   ss << "pageCount:" << page_count << ", allocatedCount:" << allocated_pages;
@@ -917,3 +927,203 @@ RC BufferPoolManager::get_buffer_pool(int32_t id, DiskBufferPool *&bp)
   return RC::SUCCESS;
 }
 
+TextBufferPool::~TextBufferPool()
+{
+  close_file();
+  LOG_INFO("text buffer pool exit");
+}
+
+RC TextBufferPool::create_file(const char *file_name)
+{
+  int fd = open(file_name, O_RDWR | O_CREAT | O_EXCL, S_IREAD | S_IWRITE);
+  if (fd < 0) {
+    LOG_ERROR("Failed to create %s, due to %s.", file_name, strerror(errno));
+    return RC::SCHEMA_DB_EXIST;
+  }
+
+  close(fd);
+
+  /**
+   * Here don't care about the failure
+   */
+  fd = open(file_name, O_RDWR);
+  if (fd < 0) {
+    LOG_ERROR("Failed to open for readwrite %s, due to %s.", file_name, strerror(errno));
+    return RC::IOERR_ACCESS;
+  }
+
+  TextPage page;
+  memset(page.data, 0, TP_PAGE_SIZE);
+
+  TPFileHeader *file_header    = (TPFileHeader *)page.data;
+  file_header->allocated_pages = 1;
+  file_header->page_count      = 1;
+
+  char *bitmap = file_header->bitmap;
+  bitmap[0] |= 0x01;
+  if (lseek(fd, 0, SEEK_SET) == -1) {
+    LOG_ERROR("Failed to seek file %s to position 0, due to %s .", file_name, strerror(errno));
+    close(fd);
+    return RC::IOERR_SEEK;
+  }
+
+  if (writen(fd, (char *)page.data, BP_PAGE_SIZE) != 0) {
+    LOG_ERROR("Failed to write header to file %s, due to %s.", file_name, strerror(errno));
+    close(fd);
+    return RC::IOERR_WRITE;
+  }
+
+  close(fd);
+  LOG_INFO("Successfully create %s.", file_name);
+  return RC::SUCCESS;
+}
+
+RC TextBufferPool::open_file(const char *file_name)
+{
+  // 打开文件
+  int fd = open(file_name, O_RDWR);
+  if (fd < 0) {
+    LOG_ERROR("Failed to open %s, due to %s.", file_name, strerror(errno));
+    return RC::IOERR_ACCESS;
+  }
+  LOG_INFO("Successfully open text pool file %s, %p.", file_name, file_name);
+
+  file_name_ = file_name;
+  file_desc_ = fd;
+
+  // 为文件头动态分配内存（一个页面大小）
+  hdr_page_ = new TextPage;
+  int ret = readn(file_desc_, (char *)hdr_page_->data, TP_PAGE_SIZE);
+  if (ret != 0) {
+    LOG_ERROR("Failed to read first page of %s, due to %s.", file_name, strerror(errno));
+    close(fd);
+    delete hdr_page_;
+    hdr_page_ = nullptr;
+    file_desc_ = -1;
+    return RC::IOERR_READ;
+  }
+
+  file_header_ = reinterpret_cast<TPFileHeader *>(hdr_page_->data);
+  if (file_header_ == nullptr) {
+    LOG_ERROR("Failed to allocate page for file header. file name %s", file_name_.c_str());
+    close(file_desc_);
+    delete hdr_page_;
+    hdr_page_ = nullptr;
+    file_desc_ = -1;
+    return RC::NOMEM;
+  }
+
+  LOG_INFO("Successfully open %s. file_desc=%d, file_header=%p, file header=%s",
+           file_name, file_desc_, file_header_, file_header_->to_string().c_str());
+  return RC::SUCCESS;
+}
+
+RC TextBufferPool::close_file()
+{
+  RC rc = RC::SUCCESS;
+  if (file_desc_ < 0) {
+    return rc;
+  }
+
+  // 将文件头写回磁盘
+  if (hdr_page_ != nullptr) {
+    // 首先将文件偏移调整到第一页的位置
+    if (lseek(file_desc_, 0, SEEK_SET) == -1) {
+      LOG_ERROR("Failed to seek file %s to position 0 when closing, due to %s.", file_name_.c_str(), strerror(errno));
+      close(file_desc_);
+      file_desc_ = -1;
+      return RC::IOERR_SEEK;
+    }
+
+    // 将文件头的内容写回第一页
+    int ret = writen(file_desc_, hdr_page_, sizeof(TextPage));
+    if (ret != 0) {
+      LOG_ERROR("Failed to write header back to file %s, due to %s.", file_name_.c_str(), strerror(errno));
+      close(file_desc_);
+      file_desc_ = -1;
+      return RC::IOERR_WRITE;
+    }
+
+    // 释放动态分配的文件头内存
+    delete hdr_page_;
+    hdr_page_ = nullptr;
+  }
+
+  // 关闭文件描述符
+  if (close(file_desc_) < 0) {
+    LOG_ERROR("Failed to close file %s, due to %s.", file_name_.c_str(), strerror(errno));
+    return RC::IOERR_CLOSE;
+  }
+
+  // 重置文件描述符和文件名
+  file_desc_ = -1;
+
+  LOG_INFO("Successfully closed %s.", file_name_.c_str());
+  return RC::SUCCESS;
+}
+
+RC TextBufferPool::drop_file()
+{
+  RC rc = RC::SUCCESS;
+
+  rc = close_file();
+  if (OB_FAIL(rc)) {
+    return rc;
+  }
+
+  if (::unlink(file_name_.data()) < 0) {
+    if (ENOENT == errno) {
+      LOG_ERROR("Failed to remove table file, it has not been created. %s, EEXIST, %s", file_name_.data(), strerror(errno));
+      return RC::SCHEMA_TABLE_NOT_EXIST;
+    }
+    LOG_ERROR("Remove table file failed. filename=%s, errmsg=%d:%s", file_name_.data(), errno, strerror(errno));
+    return RC::IOERR_OPEN;
+  }
+
+  LOG_INFO("Successfully drop text file %s", file_name_.data());
+  file_name_.clear();
+  return RC::SUCCESS;
+}
+
+RC TextBufferPool::new_text(text_t *id, const void *__restrict src, const int length)
+{
+  RC rc = RC::SUCCESS;
+
+  size_t offset = BP_PAGE_SIZE * file_header_->page_count;
+  *id = offset;
+
+  if (lseek(file_desc_, offset, SEEK_SET) == -1) {
+    LOG_ERROR("Failed to lseek %s at offset %d: %s.", file_name_.c_str(), offset, strerror(errno));
+    return RC::IOERR_SEEK;
+  }
+
+  if (0 != writen(file_desc_, src, length)) {
+    LOG_ERROR("Failed to write text into file due to %s.", strerror(errno));
+    return RC::IOERR_WRITE;
+  }
+  file_header_->page_count += (length + BP_PAGE_SIZE - 1) / BP_PAGE_SIZE;
+
+  return rc;
+}
+
+RC TextBufferPool::load_text(const text_t id, void *__restrict src, const int length)
+{
+  size_t const offset = id;
+  if (lseek(file_desc_, offset, SEEK_SET) == -1) {
+    LOG_ERROR("Failed to lseek %s at offset %d :%s.", file_name_.c_str(), offset, strerror(errno));
+    return RC::IOERR_SEEK;
+  }
+
+  int ret = readn(file_desc_, src, length);
+  if (ret != 0) {
+    LOG_ERROR("Failed to load text from %s, file_desc:%d, due to failed to read data:%s, ret=%d, page count=%d",
+              file_name_.c_str(), file_desc_, strerror(errno), ret, file_header_->allocated_pages);
+    return RC::IOERR_READ;
+  }
+  return RC::SUCCESS;
+}
+
+RC TextBufferPool::delete_text(const text_t id)
+{
+  return RC::SUCCESS;
+}

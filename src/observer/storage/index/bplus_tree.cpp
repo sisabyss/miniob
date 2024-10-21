@@ -234,6 +234,15 @@ int LeafIndexNodeHandler::lookup(const KeyComparator &comparator, const char *ke
   return iter - iter_begin;
 }
 
+int LeafIndexNodeHandler::unique_lookup(const AttrComparator &comparator, const char *key, bool *found /* = nullptr */) const
+{
+  const int                    size = this->size();
+  common::BinaryIterator<char> iter_begin(item_size(), __key_at(0));
+  common::BinaryIterator<char> iter_end(item_size(), __key_at(size));
+  common::BinaryIterator<char> iter = lower_bound(iter_begin, iter_end, key, comparator, found);
+  return iter - iter_begin;
+}
+
 RC LeafIndexNodeHandler::insert(int index, const char *key, const char *value)
 {
   vector<char> item(key_size() + value_size());
@@ -798,7 +807,8 @@ RC BplusTreeHandler::create(LogHandler &log_handler,
                             BufferPoolManager &bpm,
                             const char *file_name, 
                             AttrType attr_type, 
-                            int attr_length, 
+                            int attr_length,
+                            bool unique,
                             int internal_max_size /* = -1*/,
                             int leaf_max_size /* = -1 */)
 {
@@ -818,7 +828,7 @@ RC BplusTreeHandler::create(LogHandler &log_handler,
   }
   LOG_INFO("Successfully open index file %s.", file_name);
 
-  rc = this->create(log_handler, *bp, attr_type, attr_length, internal_max_size, leaf_max_size);
+  rc = this->create(log_handler, *bp, attr_type, attr_length, unique, internal_max_size, leaf_max_size);
   if (OB_FAIL(rc)) {
     bpm.close_file(file_name);
     return rc;
@@ -832,6 +842,7 @@ RC BplusTreeHandler::create(LogHandler &log_handler,
             DiskBufferPool &buffer_pool,
             AttrType attr_type,
             int attr_length,
+            bool unique /* = false */,
             int internal_max_size /* = -1 */,
             int leaf_max_size /* = -1 */)
 {
@@ -871,6 +882,7 @@ RC BplusTreeHandler::create(LogHandler &log_handler,
   file_header->internal_max_size = internal_max_size;
   file_header->leaf_max_size     = leaf_max_size;
   file_header->root_page         = BP_INVALID_PAGE_NUM;
+  unique_                        = unique;
 
   // 取消记录日志的原因请参考下面的sync调用的地方。
   // mtr.logger().init_header_page(header_frame, *file_header);
@@ -905,7 +917,7 @@ RC BplusTreeHandler::create(LogHandler &log_handler,
   return RC::SUCCESS;
 }
 
-RC BplusTreeHandler::open(LogHandler &log_handler, BufferPoolManager &bpm, const char *file_name)
+RC BplusTreeHandler::open(LogHandler &log_handler, BufferPoolManager &bpm, const char *file_name, bool unique /* = false */)
 {
   if (disk_buffer_pool_ != nullptr) {
     LOG_WARN("%s has been opened before index.open.", file_name);
@@ -920,14 +932,14 @@ RC BplusTreeHandler::open(LogHandler &log_handler, BufferPoolManager &bpm, const
     return rc;
   }
 
-  rc = this->open(log_handler, *disk_buffer_pool);
+  rc = this->open(log_handler, *disk_buffer_pool, unique);
   if (OB_SUCC(rc)) {
     LOG_INFO("open b+tree success. filename=%s", file_name);
   }
   return rc;
 }
 
-RC BplusTreeHandler::open(LogHandler &log_handler, DiskBufferPool &buffer_pool)
+RC BplusTreeHandler::open(LogHandler &log_handler, DiskBufferPool &buffer_pool, bool unique /* = false */)
 {
   if (disk_buffer_pool_ != nullptr) {
     LOG_WARN("b+tree has been opened before index.open.");
@@ -948,6 +960,7 @@ RC BplusTreeHandler::open(LogHandler &log_handler, DiskBufferPool &buffer_pool)
   header_dirty_     = false;
   disk_buffer_pool_ = &buffer_pool;
   log_handler_      = &log_handler;
+  unique_           = unique;
 
   mem_pool_item_ = make_unique<common::MemPoolItem>("b+tree");
   if (mem_pool_item_->init(file_header_.key_length) < 0) {
@@ -1264,7 +1277,13 @@ RC BplusTreeHandler::insert_entry_into_leaf_node(BplusTreeMiniTransaction &mtr, 
 {
   LeafIndexNodeHandler leaf_node(mtr, file_header_, frame);
   bool                 exists          = false;  // 该数据是否已经存在指定的叶子节点中了
-  int                  insert_position = leaf_node.lookup(key_comparator_, key, &exists);
+  /* 如果为unique索引，则要求字段属性不重复 */
+  int                  insert_position;
+  if (unique_) {
+    insert_position = leaf_node.unique_lookup(key_comparator_.attr_comparator(), key, &exists);
+  } else {
+    insert_position = leaf_node.lookup(key_comparator_, key, &exists);
+  }
   if (exists) {
     LOG_TRACE("entry exists");
     return RC::RECORD_DUPLICATE_KEY;

@@ -8,17 +8,24 @@ EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
 MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
 See the Mulan PSL v2 for more details. */
 
-#include "common/type/char_type.h"
-#include "common/type/float_type.h"
-#include "common/type/integer_type.h"
-#include "common/type/data_type.h"
-#include "common/type/date_type.h"
+#pragma once
+#ifndef TEXT_H_
+#define TEXT_H_
 
-array<unique_ptr<DataType>, static_cast<int>(AttrType::MAXTYPE)> DataType::type_instances_ = {
-    make_unique<DataType>(AttrType::UNDEFINED),
-    make_unique<CharType>(),
-    make_unique<IntegerType>(),
-    make_unique<FloatType>(),
-    make_unique<DataType>(AttrType::BOOLEANS),
-    make_unique<DateType>(),
+#include <cstddef>
+#include <string>
+
+static constexpr int MAX_TEXT_LENGTH = 65535;
+
+struct Text {
+    size_t id;
+    size_t len;
+
+    inline std::string to_string() const;
 };
+
+inline std::string Text::to_string() const {
+    return std::to_string(id) + ":" + std::to_string(len);
+}
+
+#endif // TEXT_H_

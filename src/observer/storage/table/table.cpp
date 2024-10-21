@@ -12,8 +12,11 @@ See the Mulan PSL v2 for more details. */
 // Created by Meiyi & Wangyunlai on 2021/5/13.
 //
 
+#include <cerrno>
+#include <cstdio>
 #include <limits.h>
 #include <string.h>
+#include <unistd.h>
 
 #include "common/defs.h"
 #include "common/lang/string.h"
@@ -21,6 +24,8 @@ See the Mulan PSL v2 for more details. */
 #include "common/lang/algorithm.h"
 #include "common/log/log.h"
 #include "common/global_context.h"
+#include "common/text.hpp"
+#include "common/type/attr_type.h"
 #include "storage/db/db.h"
 #include "storage/buffer/disk_buffer_pool.h"
 #include "storage/common/condition_filter.h"
@@ -36,6 +41,12 @@ Table::~Table()
   if (record_handler_ != nullptr) {
     delete record_handler_;
     record_handler_ = nullptr;
+  }
+
+  if (text_buffer_pool_ != nullptr) {
+    text_buffer_pool_->close_file();
+    delete text_buffer_pool_;
+    text_buffer_pool_ = nullptr;
   }
 
   if (data_buffer_pool_ != nullptr) {
@@ -123,7 +134,119 @@ RC Table::create(Db *db, int32_t table_id, const char *path, const char *name, c
     return rc;
   }
 
+  /*
+  bool exist_text_field = false;
+  for (const FieldMeta &field : *table_meta_.field_metas()) {
+    if (AttrType::TEXTS == field.type()) {
+      exist_text_field = true;
+      break;
+    }
+  }
+  if (exist_text_field) {
+  */
+    std::string text_file = table_text_file(base_dir, name);
+    rc = text_buffer_pool_->create_file(text_file.c_str());
+    if (rc != RC::SUCCESS) {
+      LOG_ERROR("Failed to create disk buffer pool of text file. file name=%s", text_file.c_str());
+      return rc;
+    }
+    rc = init_text_handler(base_dir);
+    if (rc != RC::SUCCESS) {
+      LOG_ERROR("Failed to create table %s due to init text handler failed.", text_file.c_str());
+      return rc;
+    }
+  // }
+
   LOG_INFO("Successfully create table %s:%s", base_dir, name);
+  return rc;
+}
+
+/**
+ * Here we do two things:
+ * 1. Close record handler.
+ * 2. Remove index and index files.
+ * 3. Remove data file.
+ * 4. Remove meta data file.
+ */
+RC Table::drop(Db *db, const char *path, const char *name, const char *base_dir)
+{
+  if (common::is_blank(name)) {
+    LOG_WARN("Name cannot be empty");
+    return RC::INVALID_ARGUMENT;
+  }
+
+  RC rc = RC::SUCCESS;
+
+  LOG_INFO("Begin to drop table %s:%s", base_dir, name);
+
+  // Free text file
+  text_buffer_pool_->drop_file();
+  delete text_buffer_pool_;
+  text_buffer_pool_ = nullptr;
+
+  // 1. Free record handler
+  if (record_handler_ != nullptr) {
+    record_handler_->close();
+    delete record_handler_;
+    record_handler_ = nullptr;
+  }
+  if (data_buffer_pool_ != nullptr) {
+    data_buffer_pool_->close_file();
+    data_buffer_pool_ = nullptr;
+  }
+
+  // 2. Remove index and index files.
+  const int index_num = table_meta_.index_num();
+  for (int i = 0; i < index_num; i++) {
+    const IndexMeta *index_meta = table_meta_.index(i);
+    string          index_file = table_index_file(base_dir, this->name(), index_meta->name());
+    if(::unlink(index_file.c_str()) < 0) {
+      if (ENOENT == errno) {
+        LOG_ERROR("Failed to remove index file, it has not been created. %s, EEXIST, %s", path, strerror(errno));
+        return RC::SCHEMA_TABLE_NOT_EXIST;
+      }
+      LOG_ERROR("Remove index file failed. filename=%s, errmsg=%d:%s", path, errno, strerror(errno));
+      return RC::IOERR_OPEN;
+    }
+  }
+  for (Index *ix : indexes_) {
+    delete ix;
+    ix = nullptr;
+  }
+  indexes_.clear();
+
+  // 3. Remove data file
+  string             data_file = table_data_file(base_dir, name);
+  /*
+  BufferPoolManager &bpm       = db->buffer_pool_manager();
+  rc                           = bpm.close_file(data_file.c_str());
+  if (rc != RC::SUCCESS) {
+    LOG_ERROR("Failed to close disk buffer pool of data file. file name=%s", data_file.c_str());
+    return rc;
+  }
+  */
+
+  /* NOTE: I do not implement BufferPoolManager::remove_file() */
+  if(::unlink(data_file.c_str()) < 0) {
+    if (ENOENT == errno) {
+      LOG_ERROR("Failed to remove table data file, it has not been created. %s, EEXIST, %s", path, strerror(errno));
+      return RC::SCHEMA_TABLE_NOT_EXIST;
+    }
+    LOG_ERROR("Remove table file failed. filename=%s, errmsg=%d:%s", path, errno, strerror(errno));
+    return RC::IOERR_OPEN;
+  }
+
+  // 4. Remove meta data file
+  if (::unlink(path) < 0) {
+    if (ENOENT == errno) {
+      LOG_ERROR("Failed to remove table file, it has not been created. %s, EEXIST, %s", path, strerror(errno));
+      return RC::SCHEMA_TABLE_NOT_EXIST;
+    }
+    LOG_ERROR("Remove table file failed. filename=%s, errmsg=%d:%s", path, errno, strerror(errno));
+    return RC::IOERR_OPEN;
+  }
+
+  LOG_INFO("Successfully drop table %s:%s", base_dir, name);
   return rc;
 }
 
@@ -152,6 +275,13 @@ RC Table::open(Db *db, const char *meta_file, const char *base_dir)
   if (rc != RC::SUCCESS) {
     LOG_ERROR("Failed to open table %s due to init record handler failed.", base_dir);
     // don't need to remove the data_file
+    return rc;
+  }
+
+  // 加载text文件
+  rc = init_text_handler(base_dir);
+  if (rc != RC::SUCCESS) {
+    LOG_ERROR("Failed to open table %s due to init text handler failed.", base_dir);
     return rc;
   }
 
@@ -226,6 +356,37 @@ RC Table::get_record(const RID &rid, Record &record)
   return rc;
 }
 
+RC Table::new_text(text_t *id, const void *__restrict src, const int length)
+{
+  if (length < 0 || src == nullptr) {
+    LOG_ERROR("Invalid arguments for new_text: length=%d, src=%p", length, src);
+    return RC::INVALID_ARGUMENT;
+  }
+
+  RC rc = RC::SUCCESS;
+  rc = text_buffer_pool_->new_text(id, src, length);
+  if (RC::SUCCESS != rc) {
+    LOG_WARN("Failed to append text into disk_buffer_pool, rc=%s", strrc(rc));
+    *id = -1;
+  }
+  return rc;
+}
+
+RC Table::load_text(const text_t id, void *__restrict dst, const int length) const
+{
+  RC rc = RC::SUCCESS;
+  if (id < 0 || length < 0) {
+    LOG_ERROR("Invalid arguments for load_text: id=%d, length=%d", id, length);
+    return RC::INVALID_ARGUMENT;
+  }
+
+  rc = text_buffer_pool_->load_text(id, dst, length);
+  if (RC::SUCCESS != rc) {
+    LOG_WARN("Failed to load text from text_buffer_pool: id=%d, length=%d, rc=%s", id, length, strrc(rc));
+  }
+  return rc;
+}
+
 RC Table::recover_insert_record(Record &record)
 {
   RC rc = RC::SUCCESS;
@@ -273,7 +434,9 @@ RC Table::make_record(int value_num, const Value *values, Record &record)
   for (int i = 0; i < value_num && OB_SUCC(rc); i++) {
     const FieldMeta *field = table_meta_.field(i + normal_field_start_index);
     const Value &    value = values[i];
-    if (field->type() != value.attr_type()) {
+    if (field->type() == value.attr_type() || (field->type() == AttrType::TEXTS && value.attr_type() == AttrType::CHARS)) {
+      rc = set_value_to_record(record_data, value, field);
+    } else {
       Value real_value;
       rc = Value::cast_to(value, field->type(), real_value);
       if (OB_FAIL(rc)) {
@@ -282,8 +445,6 @@ RC Table::make_record(int value_num, const Value *values, Record &record)
         break;
       }
       rc = set_value_to_record(record_data, real_value, field);
-    } else {
-      rc = set_value_to_record(record_data, value, field);
     }
   }
   if (OB_FAIL(rc)) {
@@ -300,6 +461,15 @@ RC Table::set_value_to_record(char *record_data, const Value &value, const Field
 {
   size_t       copy_len = field->len();
   const size_t data_len = value.length();
+
+  if (field->type() == AttrType::TEXTS) {
+    Text text;
+    text.len = value.length();
+    new_text(&text.id, value.data(), text.len);
+    memcpy(record_data + field->offset(), &text, sizeof(text));
+    return RC::SUCCESS;
+  }
+
   if (field->type() == AttrType::CHARS) {
     if (copy_len > data_len) {
       copy_len = data_len + 1;
@@ -335,6 +505,22 @@ RC Table::init_record_handler(const char *base_dir)
   return rc;
 }
 
+RC Table::init_text_handler(const char *base_dir)
+{
+  std::string text_file = table_text_file(base_dir, table_meta_.name());
+
+  text_buffer_pool_ = new TextBufferPool;
+  RC          rc = text_buffer_pool_->open_file(text_file.data());
+  if (rc != RC::SUCCESS) {
+    LOG_ERROR("Failed to open disk buffer pool for file:%s. rc=%d:%s", text_file.c_str(), rc, strrc(rc));
+    delete text_buffer_pool_;
+    text_buffer_pool_ = nullptr;
+    return rc;
+  }
+
+  return rc;
+}
+
 RC Table::get_record_scanner(RecordFileScanner &scanner, Trx *trx, ReadWriteMode mode)
 {
   RC rc = scanner.open_scan(this, *data_buffer_pool_, trx, db_->log_handler(), mode, nullptr);
@@ -353,7 +539,7 @@ RC Table::get_chunk_scanner(ChunkFileScanner &scanner, Trx *trx, ReadWriteMode m
   return rc;
 }
 
-RC Table::create_index(Trx *trx, const FieldMeta *field_meta, const char *index_name)
+RC Table::create_index(Trx *trx, const FieldMeta *field_meta, const char *index_name, bool unique)
 {
   if (common::is_blank(index_name) || nullptr == field_meta) {
     LOG_INFO("Invalid input arguments, table name is %s, index_name is blank or attribute_name is blank", name());
@@ -362,7 +548,7 @@ RC Table::create_index(Trx *trx, const FieldMeta *field_meta, const char *index_
 
   IndexMeta new_index_meta;
 
-  RC rc = new_index_meta.init(index_name, *field_meta);
+  RC rc = new_index_meta.init(index_name, *field_meta, unique);
   if (rc != RC::SUCCESS) {
     LOG_INFO("Failed to init IndexMeta in table:%s, index_name:%s, field_name:%s", 
              name(), index_name, field_meta->name());

@@ -353,3 +353,64 @@ private:
   unordered_map<int32_t, DiskBufferPool *> id_to_buffer_pools_;
   atomic<int32_t>                          next_buffer_pool_id_{1};  // 系统启动时，会打开所有的表，这样就可以知道当前系统最大的ID是多少了
 };
+
+using text_t = size_t;
+
+struct TPFileHeader
+{
+  int32_t page_count;       //! 当前文件一共有多少个页面
+  int32_t allocated_pages;  //! 已经分配了多少个页面
+  char    bitmap[0];        //! 页面分配位图, 第0个页面(就是当前页面)，总是1
+
+  /**
+   * 能够分配的最大的页面个数，即bitmap的字节数 乘以8
+   */
+  static const int MAX_PAGE_NUM = (TP_PAGE_SIZE - sizeof(page_count) - sizeof(allocated_pages)) * 8;
+
+  string to_string() const;
+};
+
+class TextBufferPool final
+{
+public:
+  TextBufferPool() = default;
+  ~TextBufferPool();
+
+  /**
+   * 根据文件名创建一个分页文件
+   */
+  RC create_file(const char *file_name);
+
+  /**
+   * 根据文件名打开一个分页文件
+   */
+  RC open_file(const char *file_name);
+
+  /**
+   * 关闭分页文件
+   */
+  RC close_file();
+
+  /**
+   * 删除分页文件
+   */
+  RC drop_file();
+
+public:
+  RC new_text(text_t *id, const void *__restrict src, const int length);
+  RC load_text(const text_t id, void *__restrict src, const int length);
+  RC delete_text(const text_t id);
+
+public:
+  const char *filename() const { return file_name_.c_str(); }
+
+private:
+  int file_desc_ = -1;  /// 文件描述符
+  TextPage     *hdr_page_       = nullptr;  /// 文件头页面
+  TPFileHeader *file_header_    = nullptr;  /// 文件头
+
+  string file_name_;  /// 文件名
+
+  common::Mutex lock_;
+  common::Mutex wr_lock_;
+};

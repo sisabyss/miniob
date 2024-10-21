@@ -351,6 +351,12 @@ public:
    */
   int lookup(const KeyComparator &comparator, const char *key, bool *found = nullptr) const;
 
+  /**
+   * 如果字段属性已经存在，会设置found的值。
+   * 因此支持unique index。
+   */
+  int unique_lookup(const AttrComparator &comparator, const char *key, bool *found = nullptr) const;
+
   RC  insert(int index, const char *key, const char *value);
   RC  remove(int index);
   int remove(const char *key, const KeyComparator &comparator);
@@ -459,9 +465,9 @@ public:
    * @param internal_max_size 内部节点最大大小
    * @param leaf_max_size 叶子节点最大大小
    */
-  RC create(LogHandler &log_handler, BufferPoolManager &bpm, const char *file_name, AttrType attr_type, int attr_length,
+  RC create(LogHandler &log_handler, BufferPoolManager &bpm, const char *file_name, AttrType attr_type, int attr_length, bool unique,
       int internal_max_size = -1, int leaf_max_size = -1);
-  RC create(LogHandler &log_handler, DiskBufferPool &buffer_pool, AttrType attr_type, int attr_length,
+  RC create(LogHandler &log_handler, DiskBufferPool &buffer_pool, AttrType attr_type, int attr_length, bool unique,
       int internal_max_size = -1, int leaf_max_size = -1);
 
   /**
@@ -470,8 +476,8 @@ public:
    * @param bpm 缓冲池管理器
    * @param file_name 文件名
    */
-  RC open(LogHandler &log_handler, BufferPoolManager &bpm, const char *file_name);
-  RC open(LogHandler &log_handler, DiskBufferPool &buffer_pool);
+  RC open(LogHandler &log_handler, BufferPoolManager &bpm, const char *file_name, bool unique = false);
+  RC open(LogHandler &log_handler, DiskBufferPool &buffer_pool, bool unique = false);
 
   /**
    * 关闭句柄indexHandle对应的索引文件
@@ -639,6 +645,7 @@ protected:
   LogHandler     *log_handler_      = nullptr;  /// 日志处理器
   DiskBufferPool *disk_buffer_pool_ = nullptr;  /// 磁盘缓冲池
   bool            header_dirty_     = false;    /// 是否需要更新头页面
+  bool            unique_;                      /// 是否为unique索引
   IndexFileHeader file_header_;
 
   // 在调整根节点时，需要加上这个锁。

@@ -13,6 +13,7 @@ See the Mulan PSL v2 for more details. */
 #include "common/log/log.h"
 #include "common/type/integer_type.h"
 #include "common/value.h"
+#include <string>
 
 int IntegerType::compare(const Value &left, const Value &right) const
 {
@@ -26,6 +27,21 @@ int IntegerType::compare(const Value &left, const Value &right) const
     return common::compare_float((void *)&left_val, (void *)&right_val);
   }
   return INT32_MAX;
+}
+
+RC IntegerType::max(const Value &left, const Value &right, Value &result) const{
+  result.set_int((left.get_int() > right.get_int())? left.get_int():right.get_int());
+  return RC::SUCCESS;
+}
+
+RC IntegerType::min(const Value &left, const Value &right, Value &result) const{
+  result.set_int((left.get_int() < right.get_int())? left.get_int():right.get_int());
+  return RC::SUCCESS;
+}
+
+RC IntegerType::count(const int num, Value &result) const{
+  result.set_int(num);
+  return RC::SUCCESS;
 }
 
 RC IntegerType::add(const Value &left, const Value &right, Value &result) const
@@ -49,6 +65,39 @@ RC IntegerType::multiply(const Value &left, const Value &right, Value &result) c
 RC IntegerType::negative(const Value &val, Value &result) const
 {
   result.set_int(-val.get_int());
+  return RC::SUCCESS;
+}
+
+int IntegerType::cast_cost(AttrType type)
+{
+  if (type == AttrType::INTS) {
+    return 0;
+  }
+  if (type == AttrType::FLOATS) {
+    return 1;
+  }
+  /*
+  if (type == AttrType::CHARS) {
+    return 2;
+  }
+  */
+  return INT32_MAX;
+}
+
+RC IntegerType::cast_to(const Value &val, AttrType type, Value &result) const
+{
+  switch (type) {
+    case AttrType::FLOATS: {
+      result.set_float(static_cast<float>(val.get_int()));
+    } break;
+    /*
+    case AttrType::CHARS: {
+      std::string tmp_str = std::to_string(val.get_int());
+      result.set_string(tmp_str.data());
+    } break;
+    */
+    default: return RC::UNIMPLEMENTED;
+  }
   return RC::SUCCESS;
 }
 

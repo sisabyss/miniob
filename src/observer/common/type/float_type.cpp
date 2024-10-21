@@ -25,6 +25,22 @@ int FloatType::compare(const Value &left, const Value &right) const
   return common::compare_float((void *)&left_val, (void *)&right_val);
 }
 
+RC FloatType::max(const Value &left, const Value &right, Value &result) const{
+  result.set_float((left.get_float() > right.get_float())? left.get_float():right.get_float());
+  return RC::SUCCESS;
+}
+
+RC FloatType::min(const Value &left, const Value &right, Value &result) const{
+  result.set_float((left.get_float() < right.get_float())? left.get_float():right.get_float());
+  return RC::SUCCESS;
+}
+
+RC FloatType::avg(const Value &left, const int num,  const Value &right, Value &result) const{
+  float totalSum = right.get_float() * num + left.get_float();
+  result.set_float(totalSum / (num + 1));
+  return RC::SUCCESS;
+}
+
 RC FloatType::add(const Value &left, const Value &right, Value &result) const
 {
   result.set_float(left.get_float() + right.get_float());
@@ -58,6 +74,33 @@ RC FloatType::negative(const Value &val, Value &result) const
   result.set_float(-val.get_float());
   return RC::SUCCESS;
 }
+
+int FloatType::cast_cost(AttrType type)
+{
+  if (type == AttrType::FLOATS) {
+    return 0;
+  }
+  /*
+  if (type == AttrType::CHARS) {
+    return 2;
+  }
+  */
+  return INT32_MAX;
+}
+
+/*
+RC FloatType::cast_to(const Value &val, AttrType type, Value &result) const
+{
+  switch (type) {
+    case AttrType::CHARS: {
+      std::string tmp_str = std::to_string(val.get_float());
+      result.set_string(tmp_str.data());
+    } break;
+    default: return RC::UNIMPLEMENTED;
+  }
+  return RC::SUCCESS;
+}
+*/
 
 RC FloatType::set_value_from_str(Value &val, const string &data) const
 {
