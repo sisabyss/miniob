@@ -24,6 +24,8 @@ See the Mulan PSL v2 for more details. */
 #include "common/lang/algorithm.h"
 #include "common/log/log.h"
 #include "common/global_context.h"
+#include "common/text.hpp"
+#include "common/type/attr_type.h"
 #include "storage/db/db.h"
 #include "storage/buffer/disk_buffer_pool.h"
 #include "storage/common/condition_filter.h"
@@ -39,6 +41,12 @@ Table::~Table()
   if (record_handler_ != nullptr) {
     delete record_handler_;
     record_handler_ = nullptr;
+  }
+
+  if (text_buffer_pool_ != nullptr) {
+    text_buffer_pool_->close_file();
+    delete text_buffer_pool_;
+    text_buffer_pool_ = nullptr;
   }
 
   if (data_buffer_pool_ != nullptr) {
@@ -126,6 +134,29 @@ RC Table::create(Db *db, int32_t table_id, const char *path, const char *name, c
     return rc;
   }
 
+  /*
+  bool exist_text_field = false;
+  for (const FieldMeta &field : *table_meta_.field_metas()) {
+    if (AttrType::TEXTS == field.type()) {
+      exist_text_field = true;
+      break;
+    }
+  }
+  if (exist_text_field) {
+  */
+    std::string text_file = table_text_file(base_dir, name);
+    rc = text_buffer_pool_->create_file(text_file.c_str());
+    if (rc != RC::SUCCESS) {
+      LOG_ERROR("Failed to create disk buffer pool of text file. file name=%s", text_file.c_str());
+      return rc;
+    }
+    rc = init_text_handler(base_dir);
+    if (rc != RC::SUCCESS) {
+      LOG_ERROR("Failed to create table %s due to init text handler failed.", text_file.c_str());
+      return rc;
+    }
+  // }
+
   LOG_INFO("Successfully create table %s:%s", base_dir, name);
   return rc;
 }
@@ -147,6 +178,11 @@ RC Table::drop(Db *db, const char *path, const char *name, const char *base_dir)
   RC rc = RC::SUCCESS;
 
   LOG_INFO("Begin to drop table %s:%s", base_dir, name);
+
+  // Free text file
+  text_buffer_pool_->drop_file();
+  delete text_buffer_pool_;
+  text_buffer_pool_ = nullptr;
 
   // 1. Free record handler
   if (record_handler_ != nullptr) {
@@ -242,6 +278,13 @@ RC Table::open(Db *db, const char *meta_file, const char *base_dir)
     return rc;
   }
 
+  // 加载text文件
+  rc = init_text_handler(base_dir);
+  if (rc != RC::SUCCESS) {
+    LOG_ERROR("Failed to open table %s due to init text handler failed.", base_dir);
+    return rc;
+  }
+
   const int index_num = table_meta_.index_num();
   for (int i = 0; i < index_num; i++) {
     const IndexMeta *index_meta = table_meta_.index(i);
@@ -313,6 +356,37 @@ RC Table::get_record(const RID &rid, Record &record)
   return rc;
 }
 
+RC Table::new_text(text_t *id, const void *__restrict src, const int length)
+{
+  if (length < 0 || src == nullptr) {
+    LOG_ERROR("Invalid arguments for new_text: length=%d, src=%p", length, src);
+    return RC::INVALID_ARGUMENT;
+  }
+
+  RC rc = RC::SUCCESS;
+  rc = text_buffer_pool_->new_text(id, src, length);
+  if (RC::SUCCESS != rc) {
+    LOG_WARN("Failed to append text into disk_buffer_pool, rc=%s", strrc(rc));
+    *id = -1;
+  }
+  return rc;
+}
+
+RC Table::load_text(const text_t id, void *__restrict dst, const int length) const
+{
+  RC rc = RC::SUCCESS;
+  if (id < 0 || length < 0) {
+    LOG_ERROR("Invalid arguments for load_text: id=%d, length=%d", id, length);
+    return RC::INVALID_ARGUMENT;
+  }
+
+  rc = text_buffer_pool_->load_text(id, dst, length);
+  if (RC::SUCCESS != rc) {
+    LOG_WARN("Failed to load text from text_buffer_pool: id=%d, length=%d, rc=%s", id, length, strrc(rc));
+  }
+  return rc;
+}
+
 RC Table::recover_insert_record(Record &record)
 {
   RC rc = RC::SUCCESS;
@@ -360,7 +434,9 @@ RC Table::make_record(int value_num, const Value *values, Record &record)
   for (int i = 0; i < value_num && OB_SUCC(rc); i++) {
     const FieldMeta *field = table_meta_.field(i + normal_field_start_index);
     const Value &    value = values[i];
-    if (field->type() != value.attr_type()) {
+    if (field->type() == value.attr_type() || (field->type() == AttrType::TEXTS && value.attr_type() == AttrType::CHARS)) {
+      rc = set_value_to_record(record_data, value, field);
+    } else {
       Value real_value;
       rc = Value::cast_to(value, field->type(), real_value);
       if (OB_FAIL(rc)) {
@@ -369,8 +445,6 @@ RC Table::make_record(int value_num, const Value *values, Record &record)
         break;
       }
       rc = set_value_to_record(record_data, real_value, field);
-    } else {
-      rc = set_value_to_record(record_data, value, field);
     }
   }
   if (OB_FAIL(rc)) {
@@ -387,6 +461,15 @@ RC Table::set_value_to_record(char *record_data, const Value &value, const Field
 {
   size_t       copy_len = field->len();
   const size_t data_len = value.length();
+
+  if (field->type() == AttrType::TEXTS) {
+    Text text;
+    text.len = value.length();
+    new_text(&text.id, value.data(), text.len);
+    memcpy(record_data + field->offset(), &text, sizeof(text));
+    return RC::SUCCESS;
+  }
+
   if (field->type() == AttrType::CHARS) {
     if (copy_len > data_len) {
       copy_len = data_len + 1;
@@ -416,6 +499,22 @@ RC Table::init_record_handler(const char *base_dir)
     data_buffer_pool_ = nullptr;
     delete record_handler_;
     record_handler_ = nullptr;
+    return rc;
+  }
+
+  return rc;
+}
+
+RC Table::init_text_handler(const char *base_dir)
+{
+  std::string text_file = table_text_file(base_dir, table_meta_.name());
+
+  text_buffer_pool_ = new TextBufferPool;
+  RC          rc = text_buffer_pool_->open_file(text_file.data());
+  if (rc != RC::SUCCESS) {
+    LOG_ERROR("Failed to open disk buffer pool for file:%s. rc=%d:%s", text_file.c_str(), rc, strrc(rc));
+    delete text_buffer_pool_;
+    text_buffer_pool_ = nullptr;
     return rc;
   }
 

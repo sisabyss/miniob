@@ -23,6 +23,8 @@ See the Mulan PSL v2 for more details. */
 struct RID;
 class Record;
 class DiskBufferPool;
+using text_t = size_t;
+class TextBufferPool;
 class RecordFileHandler;
 class RecordFileScanner;
 class ChunkFileScanner;
@@ -89,6 +91,12 @@ public:
   RC delete_record(const RID &rid);
   RC get_record(const RID &rid, Record &record);
 
+  /**
+   * @brief 在当前的表中插入一条超长文本
+   */
+  RC new_text(text_t *id, const void *__restrict src, const int length);
+  RC load_text(const text_t id, void *__restrict dst, const int length) const;
+
   RC recover_insert_record(Record &record);
 
   // TODO refactor
@@ -126,6 +134,7 @@ private:
 
 private:
   RC init_record_handler(const char *base_dir);
+  RC init_text_handler(const char *base_dir);
 
 public:
   Index *find_index(const char *index_name) const;
@@ -136,6 +145,7 @@ private:
   string             base_dir_;
   TableMeta          table_meta_;
   DiskBufferPool    *data_buffer_pool_ = nullptr;  /// 数据文件关联的buffer pool
+  TextBufferPool    *text_buffer_pool_ = nullptr;  /// text文件关联的buffer pool
   RecordFileHandler *record_handler_   = nullptr;  /// 记录操作
   vector<Index *>    indexes_;
 };

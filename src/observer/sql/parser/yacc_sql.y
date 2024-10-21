@@ -90,6 +90,7 @@ UnboundAggregateExpr *create_aggregate_expression(const char *aggregate_name,
         STRING_T
         FLOAT_T
         DATE_T
+        TEXT_T
         HELP
         EXIT
         DOT //QUOTE
@@ -392,7 +393,20 @@ attr_def:
       $$ = new AttrInfoSqlNode;
       $$->type = (AttrType)$2;
       $$->name = $1;
-      $$->length = 4;
+      switch($$->type) {
+        case AttrType::INTS:
+        case AttrType::CHARS:
+        case AttrType::FLOATS:
+        case AttrType::DATES: {
+          $$->length = 4;
+        } break;
+        case AttrType::TEXTS: {
+          $$->length = 16;
+        } break;
+        default: {
+          $$->length = 4;
+        } break;
+      }
       free($1);
     }
     ;
@@ -404,6 +418,7 @@ type:
     | STRING_T { $$ = static_cast<int>(AttrType::CHARS); }
     | FLOAT_T  { $$ = static_cast<int>(AttrType::FLOATS); }
     | DATE_T  { $$ = static_cast<int>(AttrType::DATES); }
+    | TEXT_T { $$ = static_cast<int>(AttrType::TEXTS); }
     ;
 insert_stmt:        /*insert   语句的语法解析树*/
     INSERT INTO ID VALUES LBRACE value value_list RBRACE 

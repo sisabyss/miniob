@@ -49,10 +49,14 @@ RC UpdateStmt::create(Db *db, const UpdateSqlNode &update, Stmt *&stmt)
     LOG_WARN("field %s not exist in table %s", update.attribute_name.c_str(), update.relation_name.c_str());
     return RC::SCHEMA_FIELD_NOT_EXIST;
   }
-  if (field_meta->type() != update.value.attr_type()) {
-     LOG_WARN("update value failed to cast into target type, src=%s, target=%s",
-          attr_type_to_string(update.value.attr_type()), attr_type_to_string(field_meta->type()));
-     return RC::INVALID_ARGUMENT;
+
+  if (field_meta->type() == update.value.attr_type()
+      || (field_meta->type() == AttrType::TEXTS && update.value.attr_type() == AttrType::CHARS)) {
+    /* skip */
+  } else {
+    LOG_WARN("update value failed to cast into target type, src=%s, target=%s",
+        attr_type_to_string(update.value.attr_type()), attr_type_to_string(field_meta->type()));
+    return RC::INVALID_ARGUMENT;
   }
 
   // create filter statement in `where` statement

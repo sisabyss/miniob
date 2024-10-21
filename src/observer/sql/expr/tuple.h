@@ -19,6 +19,9 @@ See the Mulan PSL v2 for more details. */
 #include <vector>
 
 #include "common/log/log.h"
+#include "common/rc.h"
+#include "common/text.hpp"
+#include "common/type/attr_type.h"
 #include "sql/expr/expression.h"
 #include "sql/expr/tuple_cell.h"
 #include "sql/parser/parse.h"
@@ -199,8 +202,21 @@ public:
 
     FieldExpr       *field_expr = speces_[index];
     const FieldMeta *field_meta = field_expr->field().meta();
-    cell.set_type(field_meta->type());
-    cell.set_data(this->record_->data() + field_meta->offset(), field_meta->len());
+    if (field_meta->type() == AttrType::TEXTS) {
+      cell.set_type(AttrType::CHARS);
+      const Text text = *(Text*)(record_->data() + field_meta->offset());
+      char *data = (char*)malloc(text.len);
+      RC rc = table_->load_text(text.id, data, text.len);
+      if (OB_FAIL(rc)) {
+        LOG_WARN("failed to load text from table, rc: %s", strrc(rc));
+        return rc;
+      }
+      cell.set_data(data, text.len);
+      free(data);
+    } else {
+      cell.set_type(field_meta->type());
+      cell.set_data(this->record_->data() + field_meta->offset(), field_meta->len());
+    }
     return RC::SUCCESS;
   }
 

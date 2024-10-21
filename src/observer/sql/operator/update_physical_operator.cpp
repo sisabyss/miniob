@@ -10,6 +10,9 @@ See the Mulan PSL v2 for more details. */
 
 #include "update_physical_operator.h"
 #include "common/log/log.h"
+#include "common/rc.h"
+#include "common/text.hpp"
+#include "common/type/attr_type.h"
 #include "sql/expr/tuple.h"
 #include "storage/record/record.h"
 #include "storage/table/table.h"
@@ -21,7 +24,6 @@ UpdatePhysicalOperator::UpdatePhysicalOperator(Table *table, Value &&value, Fiel
 
 RC UpdatePhysicalOperator::open(Trx *trx)
 {
-  LOG_INFO("UpdatePhysicalOperator::open(): begin");
   if (children_.empty()) {
     return RC::SUCCESS;
   }
@@ -36,7 +38,6 @@ RC UpdatePhysicalOperator::open(Trx *trx)
   trx_ = trx;
 
   while (OB_SUCC(rc = child->next())) {
-    LOG_INFO("UpdatePhysicalOperator::open(): collect record");
     Tuple *tuple = child->current_tuple();
     if (nullptr == tuple) {
       LOG_WARN("failed to get current record: %s", strrc(rc));
@@ -52,7 +53,6 @@ RC UpdatePhysicalOperator::open(Trx *trx)
 
   // 先收集记录再更新
   for (Record &record : records_) {
-    LOG_INFO("UpdatePhysicalOperator::open(): update record");
     rc = trx_->delete_record(table_, record);
     if (rc != RC::SUCCESS) {
       LOG_WARN("failed to delete record: %s", strrc(rc));
@@ -68,10 +68,22 @@ RC UpdatePhysicalOperator::open(Trx *trx)
 
     int const field_offset = field_.meta()->offset();
     int const field_len    = field_.meta()->len();
-    new_record.set_field(field_offset, field_len, value_.data());
-    if (rc != RC::SUCCESS) {
-      LOG_WARN("failed to set field record: %s", strrc(rc));
-      return rc;
+
+    if (field_.attr_type() == AttrType::TEXTS) {
+      Text text;
+      text.len = value_.length();
+      rc = table_->new_text(&text.id, value_.data(), text.len);
+      if (OB_FAIL(rc)) {
+        LOG_WARN("failed to write text into table, rc: %s", strrc(rc));
+        return rc;
+      }
+      new_record.set_field(field_offset, field_len, (char*)&text);
+    } else {
+      new_record.set_field(field_offset, field_len, value_.data());
+      if (rc != RC::SUCCESS) {
+        LOG_WARN("failed to set field record: %s", strrc(rc));
+        return rc;
+      }
     }
 
     rc = trx->insert_record(table_, new_record);

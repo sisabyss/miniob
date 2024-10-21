@@ -17,6 +17,7 @@ See the Mulan PSL v2 for more details. */
 #include "common/date.h"
 #include "common/lang/string.h"
 #include "common/lang/memory.h"
+#include "common/text.hpp"
 #include "common/type/attr_type.h"
 #include "common/type/data_type.h"
 #include "common/type/date_type.h"
@@ -148,11 +149,12 @@ private:
 
   union Val
   {
-    int32_t int_value_;
-    float   float_value_;
-    bool    bool_value_;
-    char   *pointer_value_;
-    Date    date_value_;
+    int32_t      int_value_;
+    float        float_value_;
+    bool         bool_value_;
+    char        *pointer_value_;
+    Date         date_value_;
+    Text         text_value_;
   } value_ = {.int_value_ = 0};
 
   /// 是否申请并占有内存, 目前对于 CHARS 类型 own_data_ 为true, 其余类型 own_data_ 为false
