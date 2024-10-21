@@ -65,7 +65,6 @@ RC InsertStmt::create(Db *db, const InsertSqlNode &inserts, Stmt *&stmt)
       }
 
       if (values[i].length() > MAX_TEXT_LENGTH) {
-#define __TEST__
 #ifdef __TEST__
         LOG_WARN("text overflow, length %d over max_length 4096 but okay in test", values[i].length());
 #else

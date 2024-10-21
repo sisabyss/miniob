@@ -15,7 +15,6 @@ See the Mulan PSL v2 for more details. */
 #include <cstddef>
 #include <string>
 
-#define __TEST__
 #ifdef __TEST__
 static constexpr int MAX_TEXT_LENGTH = 4096;
 #else
