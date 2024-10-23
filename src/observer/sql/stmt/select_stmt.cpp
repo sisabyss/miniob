@@ -40,11 +40,12 @@ RC SelectStmt::create(Db *db, SelectSqlNode &select_sql, Stmt *&stmt)
 
   BinderContext binder_context;
 
-  // collect tables in `from` statement
+  // collect tables in `from` statement  并建立表名到别名的映射，检查是否有重复的别名
   vector<Table *>                tables;
   unordered_map<string, Table *> table_map;
   for (size_t i = 0; i < select_sql.relations.size(); i++) {
     const char *table_name = select_sql.relations[i].c_str();
+    const char *table_alias = select_sql.relations_alias[i].c_str();
     if (nullptr == table_name) {
       LOG_WARN("invalid argument. relation name is null. index=%d", i);
       return RC::INVALID_ARGUMENT;
@@ -56,7 +57,15 @@ RC SelectStmt::create(Db *db, SelectSqlNode &select_sql, Stmt *&stmt)
       return RC::SCHEMA_TABLE_NOT_EXIST;
     }
 
-    binder_context.add_table(table);
+    if(is_blank(table_alias)){
+      binder_context.add_table(table);
+    }else{
+      if(binder_context.alias_exist(table_alias)){
+        LOG_WARN("duplicate alias");
+        return RC::INVALID_ARGUMENT;
+      }
+      binder_context.add_table(table,table_alias);
+    }
     tables.push_back(table);
     table_map.insert({table_name, table});
   }

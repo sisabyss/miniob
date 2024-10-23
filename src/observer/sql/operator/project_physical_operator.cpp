@@ -16,8 +16,10 @@ See the Mulan PSL v2 for more details. */
 #include "common/log/log.h"
 #include "storage/record/record.h"
 #include "storage/table/table.h"
+#include "common/lang/string.h"
 
 using namespace std;
+using namespace common;
 
 ProjectPhysicalOperator::ProjectPhysicalOperator(vector<unique_ptr<Expression>> &&expressions)
   : expressions_(std::move(expressions)), tuple_(expressions_)
@@ -64,7 +66,11 @@ Tuple *ProjectPhysicalOperator::current_tuple()
 RC ProjectPhysicalOperator::tuple_schema(TupleSchema &schema) const
 {
   for (const unique_ptr<Expression> &expression : expressions_) {
-    schema.append_cell(expression->name());
+    if(expression->alias()!=nullptr && !is_blank(expression->alias())){
+      schema.append_cell(expression->alias());
+    }else{
+      schema.append_cell(expression->name());
+    }
   }
   return RC::SUCCESS;
 }

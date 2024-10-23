@@ -141,8 +141,13 @@ RC ExpressionBinder::bind_unbound_field_expression(
 
   auto unbound_field_expr = static_cast<UnboundFieldExpr *>(expr.get());
 
-  const char *table_name = unbound_field_expr->table_name();
+  const char *expression_table_name = unbound_field_expr->table_name();
   const char *field_name = unbound_field_expr->field_name();
+  const char *alias = unbound_field_expr->alias();   //属性的别名
+
+  //处理表的别名
+  const char *table_name = context_.alias_exist(expression_table_name) ?context_.alias_to_tablename(expression_table_name) : expression_table_name;
+
 
   Table *table = nullptr;
   if (is_blank(table_name)) {
@@ -172,6 +177,7 @@ RC ExpressionBinder::bind_unbound_field_expression(
     Field      field(table, field_meta);
     FieldExpr *field_expr = new FieldExpr(field);
     field_expr->set_name(field_name);
+    field_expr->set_alias(alias);
     bound_expressions.emplace_back(field_expr);
   }
 

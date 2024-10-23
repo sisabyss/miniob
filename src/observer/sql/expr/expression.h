@@ -68,6 +68,9 @@ public:
   Expression()          = default;
   virtual ~Expression() = default;
 
+  virtual const char *alias() const {return nullptr;}
+  virtual void set_alias(std::string alias){}
+
   /**
    * @brief 判断两个表达式是否相等
    */
@@ -156,8 +159,8 @@ private:
 class UnboundFieldExpr : public Expression
 {
 public:
-  UnboundFieldExpr(const std::string &table_name, const std::string &field_name)
-      : table_name_(table_name), field_name_(field_name)
+  UnboundFieldExpr(const std::string &table_name, const std::string &field_name, const std::string &alias)
+      : table_name_(table_name), field_name_(field_name), alias_(alias)
   {}
 
   virtual ~UnboundFieldExpr() = default;
@@ -169,10 +172,12 @@ public:
 
   const char *table_name() const { return table_name_.c_str(); }
   const char *field_name() const { return field_name_.c_str(); }
+  const char *alias() const { return alias_.c_str(); }
 
 private:
   std::string table_name_;
   std::string field_name_;
+  std::string alias_;
 };
 
 /**
@@ -200,6 +205,8 @@ public:
 
   const char *table_name() const { return field_.table_name(); }
   const char *field_name() const { return field_.field_name(); }
+  const char *alias() const { return alias_.c_str(); }
+  void set_alias(std::string alias){alias_ = alias;}
 
   RC get_column(Chunk &chunk, Column &column) override;
 
@@ -207,6 +214,7 @@ public:
 
 private:
   Field field_;
+  std::string alias_;
 };
 
 /**

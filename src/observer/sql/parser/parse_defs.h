@@ -37,7 +37,21 @@ struct RelAttrSqlNode
 {
   std::string relation_name;   ///< relation name (may be NULL) 表名
   std::string attribute_name;  ///< attribute name              属性名
+  std::string alias;           ///< alias                       别名
 };
+
+struct RelationInfos
+{
+  std::vector<std::string> relations;  ///< relations 表
+  std::vector<std::string> relations_alias;  ///< relations alias 表的别名
+};
+
+struct RelationInfo
+{
+  std::string relation_name;  ///< relation name 表名
+  std::string relation_alias;  ///< relation alias 表的别名
+};
+
 
 /**
  * @brief 描述比较运算符
@@ -90,6 +104,7 @@ struct SelectSqlNode
 {
   std::vector<std::unique_ptr<Expression>> expressions;  ///< 查询的表达式
   std::vector<std::string>                 relations;    ///< 查询的表
+  std::vector<std::string>                 relations_alias;    ///< 查询的表的别名
   std::vector<ConditionSqlNode>            conditions;   ///< 查询条件，使用AND串联起来多个条件
   std::vector<std::unique_ptr<Expression>> group_by;     ///< group by clause
 };

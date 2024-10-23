@@ -111,6 +111,7 @@ UnboundAggregateExpr *create_aggregate_expression(const char *aggregate_name,
         LE
         GE
         NE
+        AS
 
 /** union 中定义各种数据类型，真实生成的代码也是union类型，所以不能有非POD类型的数据 **/
 %union {
@@ -127,6 +128,8 @@ UnboundAggregateExpr *create_aggregate_expression(const char *aggregate_name,
   std::vector<ConditionSqlNode> *            condition_list;
   std::vector<RelAttrSqlNode> *              rel_attr_list;
   std::vector<std::string> *                 relation_list;
+  RelationInfos*                             relation_infors;
+  RelationInfo*                              relation_infor;
   char *                                     string;
   int                                        number;
   float                                      floats;
@@ -143,7 +146,7 @@ UnboundAggregateExpr *create_aggregate_expression(const char *aggregate_name,
 %type <condition>           condition
 %type <value>               value
 %type <number>              number
-%type <string>              relation
+%type <relation_infor>      relation             //解析表名返回一个包含表名和别名的结构体（现在只有select用了）
 %type <comp>                comp_op
 %type <rel_attr>            rel_attr
 %type <attr_infos>          attr_def_list
@@ -152,7 +155,7 @@ UnboundAggregateExpr *create_aggregate_expression(const char *aggregate_name,
 %type <condition_list>      where
 %type <condition_list>      condition_list
 %type <string>              storage_format
-%type <relation_list>       rel_list
+%type <relation_infors>     rel_list            //同理
 %type <expression>          expression
 %type <expression_list>     expression_list
 %type <expression_list>     group_by
@@ -456,7 +459,8 @@ select_stmt:        /*  select 语句的语法解析树*/
       }
 
       if ($4 != nullptr) {
-        $$->selection.relations.swap(*$4);
+        $$->selection.relations.swap($4->relations);
+        $$->selection.relations_alias.swap($4->relations_alias);
         delete $4;
       }
 
@@ -523,7 +527,7 @@ expression:
     }
     | rel_attr {
       RelAttrSqlNode *node = $1;
-      $$ = new UnboundFieldExpr(node->relation_name, node->attribute_name);
+      $$ = new UnboundFieldExpr(node->relation_name, node->attribute_name, node->alias);
       $$->set_name(token_name(sql_string, &@$));
       delete $1;
     }
@@ -546,28 +550,55 @@ rel_attr:
       free($1);
       free($3);
     }
+    | ID AS ID{
+      $$ = new RelAttrSqlNode;
+      $$->attribute_name = $1;
+      $$->alias = $3;
+      free($1);
+      free($3);
+    }
+    | ID DOT ID AS ID{
+      $$ = new RelAttrSqlNode;
+      $$->relation_name  = $1;
+      $$->attribute_name = $3;
+      $$->alias = $5;
+      free($1);
+      free($3);
+      free($5);
+    }
     ;
 
 relation:
     ID {
-      $$ = $1;
+      $$ = new RelationInfo;
+      $$->relation_name = $1;
+      free($1);
+    }
+    | ID AS ID{
+      $$ = new RelationInfo;
+      $$->relation_name = $1;
+      $$->relation_alias = $3;
+      free($1);
+      free($3);
     }
     ;
 rel_list:
     relation {
-      $$ = new std::vector<std::string>();
-      $$->push_back($1);
-      free($1);
+      $$ = new RelationInfos;
+      $$->relations.push_back($1->relation_name);
+      $$->relations_alias.push_back($1->relation_alias);
+      delete $1;
     }
     | relation COMMA rel_list {
       if ($3 != nullptr) {
         $$ = $3;
       } else {
-        $$ = new std::vector<std::string>;
+        $$ = new RelationInfos;
       }
 
-      $$->insert($$->begin(), $1);
-      free($1);
+      $$->relations.insert($$->relations.begin(), $1->relation_name);
+      $$->relations_alias.insert($$->relations_alias.begin(), $1->relation_alias);
+      delete $1;
     }
     ;
 
