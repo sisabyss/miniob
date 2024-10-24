@@ -14,8 +14,10 @@ See the Mulan PSL v2 for more details. */
 
 #include "sql/operator/project_physical_operator.h"
 #include "common/log/log.h"
+#include "sql/expr/expression.h"
 #include "storage/record/record.h"
 #include "storage/table/table.h"
+#include <unordered_set>
 
 using namespace std;
 
@@ -63,8 +65,38 @@ Tuple *ProjectPhysicalOperator::current_tuple()
 
 RC ProjectPhysicalOperator::tuple_schema(TupleSchema &schema) const
 {
-  for (const unique_ptr<Expression> &expression : expressions_) {
-    schema.append_cell(expression->name());
+  std::unordered_set<std::string_view> mult_table;
+
+  // Helper lambda to cast and check if the expression is a FieldExpr
+  auto get_field_expr = [](const std::unique_ptr<Expression> &expr) -> FieldExpr* {
+    return expr->type() == ExprType::FIELD ? dynamic_cast<FieldExpr*>(expr.get()) : nullptr;
+  };
+
+  // First pass: Collect table names
+  for (const auto &expression : expressions_) {
+    if (FieldExpr* fieldPtr = get_field_expr(expression)) {
+      LOG_TRACE("ProjectPhysicalOperator::tuple_schema: %s.%s",
+               fieldPtr->table_name(), fieldPtr->field_name());
+      mult_table.insert(fieldPtr->table_name());
+    }
   }
+
+  bool is_mult_table = mult_table.size() > 1;
+
+  // Second pass: Construct schema based on table count
+  for (const auto &expression : expressions_) {
+    if (FieldExpr* fieldPtr = get_field_expr(expression)) {
+      if (is_mult_table) {
+        // Avoid extra allocation by using string_view
+        std::string name = std::string(fieldPtr->table_name()) + "." + fieldPtr->field_name();
+        schema.append_cell(name.data());
+      } else {
+        schema.append_cell(fieldPtr->field_name());
+      }
+    } else {
+      schema.append_cell(expression->name());
+    }
+  }
+
   return RC::SUCCESS;
 }
