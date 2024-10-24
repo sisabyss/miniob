@@ -389,6 +389,14 @@ public:
   RC insert_record(const char *data, int record_size, RID *rid);
 
   /**
+   * @brief 更新一个记录到指定文件中
+   *
+   * @param data        纪录内容
+   * @param rid         待更新记录的标识符
+   */
+  RC update_record(const char *data, RID *rid);
+
+  /**
    * @brief 数据库恢复时，在指定文件指定位置插入数据
    *
    * @param data        记录内容

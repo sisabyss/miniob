@@ -126,27 +126,45 @@ RC ComparisonExpr::compare_value(const Value &left, const Value &right, bool &re
 {
   RC  rc         = RC::SUCCESS;
 
+  LOG_INFO("ComparisionExpr::compare_value: %s <=> %s.", left.to_string().data(), right.to_string().data());
+
   // LIKE and NOT LIKE Expression
   if (comp() == LIKE_OP || comp() == NO_LIKE_OP) {
-      auto left_type = left.attr_type();
-      auto right_type = right.attr_type();
+    auto left_type = left.attr_type();
+    auto right_type = right.attr_type();
 
-      // Check if both operands are of CHARS type
-      if (left_type != AttrType::CHARS || right_type != AttrType::CHARS) {
-          LOG_WARN("LIKE and NOT LIKE operations require both operands to be of CHARS type. "
-                    "Received left operand type: %s, right operand type: %s.",
-                    attr_type_to_string(left_type),
-                    attr_type_to_string(right_type));
-          return RC::INVALID_ARGUMENT;
-      }
+    // Check if both operands are of CHARS type
+    if (left_type != AttrType::CHARS || right_type != AttrType::CHARS) {
+        LOG_WARN("LIKE and NOT LIKE operations require both operands to be of CHARS type. "
+                  "Received left operand type: %s, right operand type: %s.",
+                  attr_type_to_string(left_type),
+                  attr_type_to_string(right_type));
+        return RC::INVALID_ARGUMENT;
+    }
 
-      // Evaluate LIKE/NOT LIKE expression
-      result = is_like(left.get_string().data(), right.get_string().data());
-      if (comp() == NO_LIKE_OP) {
-          result = !result; // Negate result for NOT LIKE
-      }
+    // Evaluate LIKE/NOT LIKE expression
+    result = is_like(left.get_string().data(), right.get_string().data());
+    if (comp() == NO_LIKE_OP) {
+        result = !result; // Negate result for NOT LIKE
+    }
 
-      return RC::SUCCESS;
+    return rc;
+  } else if (comp_ == IS_NULL_OP || comp_ == NOT_NULL_OP) {
+    if (right.attr_type() != AttrType::NULLS)
+      LOG_ERROR("IS(NOT) expression only support right value is `NULL`, but get %s", right.to_string().data());
+
+    result = (left.attr_type() == AttrType::NULLS);
+    if (comp_ == NOT_NULL_OP) result = !result;
+
+    LOG_TRACE("ComparisionExpr::compare: %s %s", comp_ == IS_NULL_OP ? "IS" : "IS NOT", result ? "TRUE" : "FALSE");
+
+    return rc;
+  }
+
+  /* For vanilla comparision with NULL return false */
+  if (left.attr_type() == AttrType::NULLS || right.attr_type() == AttrType::NULLS) {
+    result = false;
+    return RC::SUCCESS;
   }
 
   int cmp_result = left.compare(right);

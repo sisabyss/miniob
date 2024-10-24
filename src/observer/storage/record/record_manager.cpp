@@ -13,6 +13,7 @@ See the Mulan PSL v2 for more details. */
 //
 #include "storage/record/record_manager.h"
 #include "common/log/log.h"
+#include "common/rc.h"
 #include "storage/common/condition_filter.h"
 #include "storage/trx/trx.h"
 #include "storage/clog/log_handler.h"
@@ -603,6 +604,19 @@ RC RecordFileHandler::insert_record(const char *data, int record_size, RID *rid)
 
   // 找到空闲位置
   return record_page_handler->insert_record(data, rid);
+}
+
+RC RecordFileHandler::update_record(const char *data, RID *rid) {
+  RC ret = RC::SUCCESS;
+
+  unique_ptr<RecordPageHandler> record_page_handler(RecordPageHandler::create(storage_format_));
+
+  ret = record_page_handler->init(*disk_buffer_pool_, *log_handler_, rid->page_num, ReadWriteMode::READ_WRITE);
+  if (OB_FAIL(ret)) {
+    LOG_WARN("failed to init record page handler. page num=%d, rc=%d:%s", rid->page_num, ret, strrc(ret));
+    return ret;
+  }
+  return record_page_handler->update_record(*rid, data);
 }
 
 RC RecordFileHandler::recover_insert_record(const char *data, int record_size, const RID &rid)

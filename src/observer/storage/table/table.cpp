@@ -20,17 +20,21 @@ See the Mulan PSL v2 for more details. */
 #include <unistd.h>
 
 #include "common/defs.h"
+#include "common/lang/bitmap.h"
 #include "common/lang/string.h"
 #include "common/lang/span.h"
 #include "common/lang/algorithm.h"
 #include "common/log/log.h"
 #include "common/global_context.h"
+#include "common/rc.h"
 #include "common/text.hpp"
 #include "common/type/attr_type.h"
 #include "storage/db/db.h"
 #include "storage/buffer/disk_buffer_pool.h"
 #include "storage/common/condition_filter.h"
 #include "storage/common/meta_util.h"
+#include "storage/field/field.h"
+#include "storage/field/field_meta.h"
 #include "storage/index/bplus_tree_index.h"
 #include "storage/index/index.h"
 #include "storage/record/record_manager.h"
@@ -432,9 +436,19 @@ RC Table::make_record(int value_num, const Value *values, Record &record)
   char *record_data = (char *)malloc(record_size);
   memset(record_data, 0, record_size);
 
+  const FieldMeta *null_bitmap_field = table_meta_.null_field();
+  // NOTE: null_bitmap is already all 0 cuz of memset
+  common::Bitmap null_bitmap(record_data + null_bitmap_field->offset(), null_bitmap_field->len());
+
   for (int i = 0; i < value_num && OB_SUCC(rc); i++) {
     const FieldMeta *field = table_meta_.field(i + normal_field_start_index);
     const Value &    value = values[i];
+
+    if (value.attr_type() == AttrType::NULLS && field->nullable()) {
+      null_bitmap.set_bit(i + normal_field_start_index);
+      continue;
+    }
+
     if (field->type() == value.attr_type() || (field->type() == AttrType::TEXTS && value.attr_type() == AttrType::CHARS)) {
       rc = set_value_to_record(record_data, value, field);
     } else {
@@ -665,6 +679,55 @@ RC Table::delete_record(const Record &record)
   }
   rc = record_handler_->delete_record(&record.rid());
   return rc;
+}
+
+RC Table::update_record(Record &record, Field const &field, Value const &value) {
+  RC rc = RC::SUCCESS;
+
+  ASSERT(field.table() == this && table_meta_.field(field.meta()->name()) != nullptr,
+         "Field not belong to this table: %s:%s", field.table_name(), field.meta()->name());
+
+  const int sys_field_num = table_meta_.sys_field_num();
+  const int field_index = field.meta()->field_id() + sys_field_num;
+
+  const FieldMeta *null_bitmap_field = table_meta_.null_field();
+  common::Bitmap null_bitmap(record.data() + null_bitmap_field->offset(), null_bitmap_field->len());
+  if (value.attr_type() == AttrType::NULLS) {
+    null_bitmap.set_bit(field_index);
+  } else {
+    if (field.meta()->type() == value.attr_type() || (field.meta()->type() == AttrType::TEXTS && value.attr_type() == AttrType::CHARS)) {
+      rc = set_value_to_record(record.data(), value, field.meta());
+    } else {
+      Value real_value;
+      rc = Value::cast_to(value, field.meta()->type(), real_value);
+      if (OB_FAIL(rc)) {
+        LOG_WARN("failed to cast value. table name:%s,field name:%s,value:%s ",
+            table_meta_.name(), field.meta()->name(), value.to_string().c_str());
+      } else {
+        rc = set_value_to_record(record.data(), real_value, field.meta());
+      }
+    }
+  }
+  if (OB_FAIL(rc)) {
+    LOG_WARN("failed to update record. table name:%s", table_meta_.name());
+    return rc;
+  }
+
+  if (find_index_by_field(field.field_name())) {
+    rc = insert_entry_of_indexes(record.data(), record.rid());
+    if (OB_FAIL(rc)) {
+      LOG_ERROR("failed to insert index: %s", strrc(rc));
+      return rc;
+    }
+  }
+
+  rc = record_handler_->update_record(record.data(), &record.rid());
+  if (OB_FAIL(rc)) {
+    LOG_ERROR("failed to update record: %s", strrc(rc));
+    return rc;
+  }
+
+  return RC::SUCCESS;
 }
 
 RC Table::insert_entry_of_indexes(const char *record, const RID &rid)

@@ -14,9 +14,15 @@ See the Mulan PSL v2 for more details. */
 
 #include "sql/expr/aggregator.h"
 #include "common/log/log.h"
+#include "common/type/attr_type.h"
+#include <optional>
 
 RC MaxAggregator::accumulate(const Value &value)
 {
+  if (value.attr_type() == AttrType::NULLS) {
+    return RC::SUCCESS;
+  }
+
   if (value_.attr_type() == AttrType::UNDEFINED) {
     value_ = value;
     return RC::SUCCESS;
@@ -33,12 +39,20 @@ RC MaxAggregator::accumulate(const Value &value)
 
 RC MaxAggregator::evaluate(Value& result)
 {
-  result = value_;
+  if (value_.attr_type() == AttrType::UNDEFINED || value_.attr_type() == AttrType::NULLS) {
+    result = Value(std::nullopt);
+  } else {
+    result = value_;
+  }
   return RC::SUCCESS;
 }
 
 RC MinAggregator::accumulate(const Value &value)
 {
+  if (value.attr_type() == AttrType::NULLS) {
+    return RC::SUCCESS;
+  }
+
   if (value_.attr_type() == AttrType::UNDEFINED) {
     value_ = value;
     return RC::SUCCESS;
@@ -55,12 +69,20 @@ RC MinAggregator::accumulate(const Value &value)
 
 RC MinAggregator::evaluate(Value& result)
 {
-  result = value_;
+  if (value_.attr_type() == AttrType::UNDEFINED || value_.attr_type() == AttrType::NULLS) {
+    result = Value(std::nullopt);
+  } else {
+    result = value_;
+  }
   return RC::SUCCESS;
 }
 
 RC SumAggregator::accumulate(const Value &value)
 {
+  if (value.attr_type() == AttrType::NULLS) {
+    return RC::SUCCESS;
+  }
+
   if (value_.attr_type() == AttrType::UNDEFINED) {
     value_ = value;
     return RC::SUCCESS;
@@ -75,23 +97,29 @@ RC SumAggregator::accumulate(const Value &value)
 
 RC SumAggregator::evaluate(Value& result)
 {
-  result = value_;
+  if (value_.attr_type() == AttrType::UNDEFINED || value_.attr_type() == AttrType::NULLS) {
+    result = Value(std::nullopt);
+  } else {
+    result = value_;
+  }
   return RC::SUCCESS;
 }
 
 RC AvgAggregator::accumulate(const Value &value)
 {
-  // 仅支持 int 和 float 计算平均值
-  ASSERT(value.attr_type() == AttrType::FLOATS || value.attr_type() == AttrType::INTS, "AVG operating should be float or int, false type %s",
-        attr_type_to_string(value.attr_type()));
-
-
-  if(num_ == 0){
-    // 第一次计算，均把结果类型设为float
-    value_.set_type(AttrType::FLOATS);
+  if (value.attr_type() == AttrType::NULLS) {
+    return RC::SUCCESS;
   }
-  else if (value_.attr_type() == AttrType::UNDEFINED) {
-    value_ = value;
+
+  // 仅支持 null, int 和 float 计算平均值
+  ASSERT(value.attr_type() == AttrType::FLOATS
+      || value.attr_type() == AttrType::INTS,
+         "AVG operating should be float or int, false type %s",
+         attr_type_to_string(value.attr_type()));
+
+  if (value_.attr_type() == AttrType::UNDEFINED) {
+    value_ = Value(value.get_float());
+    this->num_++;
     return RC::SUCCESS;
   }
 
@@ -108,7 +136,11 @@ RC AvgAggregator::accumulate(const Value &value)
 
 RC AvgAggregator::evaluate(Value& result)
 {
-  result = value_;
+  if (value_.attr_type() == AttrType::UNDEFINED || value_.attr_type() == AttrType::NULLS) {
+    result = Value(std::nullopt);
+  } else {
+    result = value_;
+  }
   return RC::SUCCESS;
 }
 
@@ -118,6 +150,10 @@ RC CountAggregator::accumulate(const Value &value)
   /* 核心步骤 */
   /* 内部的 num_ 记录当前是第几个value */
   /* !!!! 后期定义 null 后，需要改动逻辑 */
+  if (value.attr_type() == AttrType::NULLS) {
+    return RC::SUCCESS;
+  }
+
   this->num_++;
   Value::count(this->num_, value_);
   return RC::SUCCESS;
@@ -125,6 +161,10 @@ RC CountAggregator::accumulate(const Value &value)
 
 RC CountAggregator::evaluate(Value& result)
 {
-  result = value_;
+  if (value_.attr_type() == AttrType::UNDEFINED || value_.attr_type() == AttrType::NULLS) {
+    result = Value(0);
+  } else {
+    result = value_;
+  }
   return RC::SUCCESS;
 }

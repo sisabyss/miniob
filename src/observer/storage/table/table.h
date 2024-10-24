@@ -35,6 +35,7 @@ class IndexScanner;
 class RecordDeleter;
 class Trx;
 class Db;
+class Field;
 
 /**
  * @brief 表
@@ -89,6 +90,7 @@ public:
   RC insert_record(Record &record);
   RC delete_record(const Record &record);
   RC delete_record(const RID &rid);
+  RC update_record(Record &record, Field const &field, Value const &value);
   RC get_record(const RID &rid, Record &record);
 
   /**

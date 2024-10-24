@@ -27,7 +27,7 @@ public:
 
 protected:
   Value value_;
-  int   num_;
+  int   num_ = 0;
 };
 
 class MaxAggregator : public Aggregator
@@ -61,6 +61,7 @@ public:
 class CountAggregator : public Aggregator
 {
 public:
+  CountAggregator() { value_ = Value(0); }
   RC accumulate(const Value &value) override;
   RC evaluate(Value &result) override;
 };

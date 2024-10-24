@@ -54,75 +54,9 @@ RC UpdatePhysicalOperator::open(Trx *trx)
 
   // 先收集记录再更新
   for (Record &record : records_) {
-    rc = trx_->delete_record(table_, record);
-    if (rc != RC::SUCCESS) {
-      LOG_WARN("failed to delete record: %s", strrc(rc));
-      return rc;
-    }
-
-    Record new_record;
-    rc = new_record.copy_data(record.data(), record.len());
-    if (rc != RC::SUCCESS) {
-      LOG_WARN("failed to copy record: %s", strrc(rc));
-      return rc;
-    }
-
-    if (field_.meta()->type() == value_.attr_type() || (field_.meta()->type() == AttrType::TEXTS && value_.attr_type() == AttrType::CHARS)) {
-      rc = set_value_to_record(new_record.data(), value_, field_.meta());
-    } else {
-      Value real_value;
-      rc = Value::cast_to(value_, field_.meta()->type(), real_value);
-      if (OB_FAIL(rc)) {
-        LOG_WARN("failed to cast value. field name:%s, value:%s ",
-            field_.meta()->name(), value_.to_string().c_str());
-      }
-      rc = set_value_to_record(new_record.data(), real_value, field_.meta());
-    }
-
-    if (OB_FAIL(rc)) {
-      LOG_WARN("failed to update record.");
-      return rc;
-    }
-
-    rc = trx->insert_record(table_, new_record);
-    if (rc != RC::SUCCESS) {
-      LOG_WARN("failed to delete record: %s", strrc(rc));
-      return rc;
-    }
+    table_->update_record(record, field_, value_);
   }
 
-  return RC::SUCCESS;
-}
-
-RC UpdatePhysicalOperator::set_value_to_record(char *record_data, const Value &value, const FieldMeta *field) const
-{
-  size_t       copy_len = field->len();
-  const size_t data_len = value.length();
-  RC           rc       = RC::SUCCESS;
-
-  if (field->type() == AttrType::TEXTS) {
-    Text text;
-#ifdef __TEST__
-    text.len = std::min(MAX_TEXT_LENGTH, value.length());
-#else
-    text.len = value.length();
-#endif
-    rc = table_->new_text(&text.id, value.data(), text.len);
-    if (OB_FAIL(rc)) {
-      LOG_WARN("failed to write text into table, rc: %s", strrc(rc));
-      return rc;
-    }
-    memcpy(record_data + field->offset(), &text, sizeof(text));
-    return RC::SUCCESS;
-  }
-
-  if (field->type() == AttrType::CHARS) {
-    if (copy_len > data_len) {
-      memset(record_data + field->offset(), 0, copy_len);
-      copy_len = data_len + 1;
-    }
-  }
-  memcpy(record_data + field->offset(), value.data(), copy_len);
   return RC::SUCCESS;
 }
 

@@ -26,6 +26,7 @@ See the Mulan PSL v2 for more details. */
 #include "sql/expr/tuple_cell.h"
 #include "sql/parser/parse.h"
 #include "common/value.h"
+#include "common/lang/bitmap.h"
 #include "storage/record/record.h"
 
 class Table;
@@ -174,7 +175,12 @@ public:
     speces_.clear();
   }
 
-  void set_record(Record *record) { this->record_ = record; }
+  void set_record(Record *record)
+  {
+    this->record_ = record;
+    const FieldMeta* null_field = this->speces_.front()->field().meta();
+    bitmap_.init(record->data() + null_field->offset(), null_field->len());
+  }
 
   void set_schema(const Table *table, const std::vector<FieldMeta> *fields)
   {
@@ -198,6 +204,11 @@ public:
     if (index < 0 || index >= static_cast<int>(speces_.size())) {
       LOG_WARN("invalid argument. index=%d", index);
       return RC::INVALID_ARGUMENT;
+    }
+
+    if (bitmap_.get_bit(index)) {
+      cell.set_null();
+      return RC::SUCCESS;
     }
 
     FieldExpr       *field_expr = speces_[index];
@@ -265,6 +276,7 @@ private:
   Record                  *record_ = nullptr;
   const Table             *table_  = nullptr;
   std::vector<FieldExpr *> speces_;
+  common::Bitmap           bitmap_;
 };
 
 /**

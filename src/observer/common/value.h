@@ -20,8 +20,8 @@ See the Mulan PSL v2 for more details. */
 #include "common/text.hpp"
 #include "common/type/attr_type.h"
 #include "common/type/data_type.h"
-#include "common/type/date_type.h"
 #include <cstdint>
+#include <optional>
 
 /**
  * @brief 属性的值
@@ -39,6 +39,7 @@ public:
   friend class BooleanType;
   friend class CharType;
   friend class DateType;
+  friend class NullType;
 
   Value() = default;
 
@@ -46,6 +47,7 @@ public:
 
   Value(AttrType attr_type, char *data, int length = 4) : attr_type_(attr_type) { this->set_data(data, length); }
 
+  explicit Value(std::nullopt_t val);
   explicit Value(int val);
   explicit Value(float val);
   explicit Value(bool val);
@@ -135,6 +137,8 @@ public:
   bool   get_boolean() const;
   Date   get_date() const;
 
+public:
+  void set_null();
 private:
   void set_int(int val);
   void set_float(float val);

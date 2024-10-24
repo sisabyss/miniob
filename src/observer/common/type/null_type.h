@@ -8,34 +8,23 @@ EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
 MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
 See the Mulan PSL v2 for more details. */
 
-//
-// Created by wangyunlai on 2021/5/7.
-//
-
 #pragma once
+#ifndef NULL_TYPE_H_
+#define NULL_TYPE_H_
 
-namespace common {
+#include "common/type/data_type.h"
 
-class Bitmap
+/**
+ * @brief NULL类型
+ * @ingroup DataType
+ */
+class NullType : public DataType
 {
 public:
-  Bitmap();
-  Bitmap(char *bitmap, int size);
+  NullType() : DataType(AttrType::NULLS) {}
+  virtual ~NullType() = default;
 
-  void init(char *bitmap, int size);
-  bool get_bit(int index) const;
-  void set_bit(int index);
-  void clear_bit(int index);
-
-  /**
-   * @param start 从哪个位开始查找，start是包含在内的
-   */
-  int next_unsetted_bit(int start);
-  int next_setted_bit(int start);
-
-private:
-  char *bitmap_;
-  int   size_;
+  RC to_string(const Value &val, string &result) const override;
 };
 
-}  // namespace common
+#endif // NULL_TYPE_H_

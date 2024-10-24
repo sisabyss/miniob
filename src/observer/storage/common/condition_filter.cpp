@@ -14,6 +14,7 @@ See the Mulan PSL v2 for more details. */
 
 #include "condition_filter.h"
 #include "common/log/log.h"
+#include "common/type/attr_type.h"
 #include "common/value.h"
 #include "storage/record/record_manager.h"
 #include "storage/table/table.h"
@@ -135,6 +136,8 @@ bool DefaultConditionFilter::filter(const Record &rec) const
   } else {
     right_value.set_value(right_.value);
   }
+
+  if (left_value.attr_type() == AttrType::NULLS || right_value.attr_type() == AttrType::NULLS) return false;
 
   int cmp_result = left_value.compare(right_value);
 

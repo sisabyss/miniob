@@ -21,6 +21,8 @@ See the Mulan PSL v2 for more details. */
 #include "common/log/log.h"
 #include "common/type/attr_type.h"
 
+Value::Value(std::nullopt_t val) { set_null(); }
+
 Value::Value(int val) { set_int(val); }
 
 Value::Value(float val) { set_float(val); }
@@ -136,6 +138,12 @@ void Value::set_data(char *data, int length)
   }
 }
 
+void Value::set_null()
+{
+  reset();
+  attr_type_        = AttrType::NULLS;
+}
+
 void Value::set_int(int val)
 {
   reset();
@@ -197,6 +205,9 @@ void Value::set_date(const Date &val) {
 void Value::set_value(const Value &value)
 {
   switch (value.attr_type_) {
+    case AttrType::NULLS: {
+      set_null();
+    } break;
     case AttrType::INTS: {
       set_int(value.get_int());
     } break;

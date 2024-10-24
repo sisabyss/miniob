@@ -5,6 +5,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <algorithm>
+#include <optional>
 
 #include "common/log/log.h"
 #include "common/lang/string.h"
@@ -121,8 +122,11 @@ UnboundAggregateExpr *create_aggregate_expression(const char *aggregate_name,
         INNER
         JOIN
         UNIQUE
+        IS_SYM
         NOT
         LIKE
+        NULL_SYM
+        NULLABLE_SYM
 
 /** union 中定义各种数据类型，真实生成的代码也是union类型，所以不能有非POD类型的数据 **/
 %union {
@@ -173,6 +177,7 @@ UnboundAggregateExpr *create_aggregate_expression(const char *aggregate_name,
 %type <expression_list>     expression_list
 %type <expression_list>     group_by
 %type <bools>               opt_unique
+%type <bools>               opt_null;
 %type <id_list>             ID_list;
 %type <sql_node>            calc_stmt
 %type <sql_node>            select_stmt
@@ -382,15 +387,16 @@ attr_def_list:
     ;
     
 attr_def:
-    ID type LBRACE number RBRACE 
+    ID type LBRACE number RBRACE opt_null
     {
       $$ = new AttrInfoSqlNode;
       $$->type = (AttrType)$2;
       $$->name = $1;
       $$->length = $4;
+      $$->nullable = $6;
       free($1);
     }
-    | ID type
+    | ID type opt_null
     {
       $$ = new AttrInfoSqlNode;
       $$->type = (AttrType)$2;
@@ -409,7 +415,19 @@ attr_def:
           $$->length = 4;
         } break;
       }
+      $$->nullable = $3;
       free($1);
+    }
+    ;
+opt_null:
+    {
+      $$ = false;
+    }
+    | NULLABLE_SYM {
+      $$ = true;
+    }
+    | NOT NULL_SYM {
+      $$ = false;
     }
     ;
 number:
@@ -454,15 +472,20 @@ value_list:
     }
     ;
 value:
-    NUMBER {
+    NULL_SYM {
+      $$ = new Value(std::nullopt);
+      // NOTE: check this:
+      // @$ = @1;
+    }
+    | NUMBER {
       $$ = new Value((int)$1);
       @$ = @1;
     }
-    |FLOAT {
+    | FLOAT {
       $$ = new Value((float)$1);
       @$ = @1;
     }
-    |SSS {
+    | SSS {
       char *tmp = common::substr($1,1,strlen($1)-2);
       $$ = new Value(tmp);
       free(tmp);
@@ -787,6 +810,50 @@ condition:
 
       delete $1;
       delete $3;
+    }
+    | rel_attr IS_SYM NULL_SYM
+    {
+      $$ = new ConditionSqlNode;
+      $$->left_is_attr = 1;
+      $$->left_attr = *$1;
+      $$->right_is_attr = 0;
+      $$->right_value.set_null();
+      $$->comp = IS_NULL_OP;
+
+      delete $1;
+    }
+    | rel_attr IS_SYM NOT NULL_SYM
+    {
+      $$ = new ConditionSqlNode;
+      $$->left_is_attr = 1;
+      $$->left_attr = *$1;
+      $$->right_is_attr = 0;
+      $$->right_value.set_null();
+      $$->comp = NOT_NULL_OP;
+
+      delete $1;
+    }
+    | value IS_SYM NULL_SYM
+    {
+      $$ = new ConditionSqlNode;
+      $$->left_is_attr = 0;
+      $$->left_value = *$1;
+      $$->right_is_attr = 0;
+      $$->right_value.set_null();
+      $$->comp = IS_NULL_OP;
+
+      delete $1;
+    }
+    | value IS_SYM NOT NULL_SYM
+    {
+      $$ = new ConditionSqlNode;
+      $$->left_is_attr = 0;
+      $$->left_value = *$1;
+      $$->right_is_attr = 0;
+      $$->right_value.set_null();
+      $$->comp = NOT_NULL_OP;
+
+      delete $1;
     }
     ;
 

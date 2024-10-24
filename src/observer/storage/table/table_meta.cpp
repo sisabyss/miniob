@@ -17,6 +17,8 @@ See the Mulan PSL v2 for more details. */
 #include "common/log/log.h"
 #include "common/global_context.h"
 #include "storage/table/table_meta.h"
+#include "common/type/attr_type.h"
+#include "storage/field/field_meta.h"
 #include "storage/trx/trx.h"
 #include "json/json.h"
 
@@ -60,27 +62,34 @@ RC TableMeta::init(int32_t table_id, const char *name, const std::vector<FieldMe
 
   int field_offset  = 0;
   int trx_field_num = 0;
-
   if (trx_fields != nullptr) {
     trx_fields_ = *trx_fields;
+    trx_field_num = static_cast<int>(trx_fields_.size());
+  } else {
+    trx_fields_.clear();
+  }
+  int const sys_field_num = trx_field_num + 1;
+  int const tot_field_num = sys_field_num + attributes.size();
+  fields_.resize(tot_field_num);
 
-    fields_.resize(attributes.size() + trx_fields->size());
+  // Add null field
+  int const null_bitmap_size = (tot_field_num + 7) / 8; // aligned 8-bit
+  fields_[0] = FieldMeta("sys_null", AttrType::CHARS, field_offset, null_bitmap_size, false, -1, false);
+  field_offset += null_bitmap_size;
+
+  if (trx_fields != nullptr) {
     for (size_t i = 0; i < trx_fields->size(); i++) {
       const FieldMeta &field_meta = (*trx_fields)[i];
-      fields_[i] = FieldMeta(field_meta.name(), field_meta.type(), field_offset, field_meta.len(), false /*visible*/, field_meta.field_id());
+      fields_[i + 1] = FieldMeta(field_meta.name(), field_meta.type(), field_offset, field_meta.len(), false /*visible*/, field_meta.field_id(), field_meta.nullable());
       field_offset += field_meta.len();
     }
-
-    trx_field_num = static_cast<int>(trx_fields->size());
-  } else {
-    fields_.resize(attributes.size());
   }
 
   for (size_t i = 0; i < attributes.size(); i++) {
     const AttrInfoSqlNode &attr_info = attributes[i];
     // `i` is the col_id of fields[i]
-    rc = fields_[i + trx_field_num].init(
-      attr_info.name.c_str(), attr_info.type, field_offset, attr_info.length, true /*visible*/, i);
+    rc = fields_[i + sys_field_num].init(
+      attr_info.name.c_str(), attr_info.type, field_offset, attr_info.length, true /*visible*/, i, attr_info.nullable);
     if (OB_FAIL(rc)) {
       LOG_ERROR("Failed to init field meta. table name=%s, field name: %s", name, attr_info.name.c_str());
       return rc;
@@ -106,7 +115,9 @@ RC TableMeta::add_index(const IndexMeta &index)
 
 const char *TableMeta::name() const { return name_.c_str(); }
 
-const FieldMeta *TableMeta::trx_field() const { return &fields_[0]; }
+const FieldMeta *TableMeta::trx_field() const { return &fields_[1]; }
+
+const FieldMeta *TableMeta::null_field() const { return &fields_[0]; }
 
 span<const FieldMeta> TableMeta::trx_fields() const
 {
@@ -138,7 +149,7 @@ const FieldMeta *TableMeta::find_field_by_offset(int offset) const
 }
 int TableMeta::field_num() const { return fields_.size(); }
 
-int TableMeta::sys_field_num() const { return static_cast<int>(trx_fields_.size()); }
+int TableMeta::sys_field_num() const { return static_cast<int>(trx_fields_.size() + 1); }
 
 const IndexMeta *TableMeta::index(const char *name) const
 {
@@ -267,11 +278,13 @@ int TableMeta::deserialize(std::istream &is)
   fields_.swap(fields);
   record_size_ = fields_.back().offset() + fields_.back().len() - fields_.begin()->offset();
 
+  /*
   for (const FieldMeta &field_meta : fields_) {
     if (!field_meta.visible()) {
       trx_fields_.push_back(field_meta); // 字段加上trx标识更好
     }
   }
+  */
 
   const Json::Value &indexes_value = table_value[FIELD_INDEXES];
   if (!indexes_value.empty()) {

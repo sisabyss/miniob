@@ -47,6 +47,7 @@ public:
   int32_t             table_id() const { return table_id_; }
   const char         *name() const;
   const FieldMeta    *trx_field() const;
+  const FieldMeta    *null_field() const;
   const FieldMeta    *field(int index) const;
   const FieldMeta    *field(const char *name) const;
   const FieldMeta    *find_field_by_offset(int offset) const;
@@ -75,7 +76,7 @@ protected:
   int32_t                table_id_ = -1;
   std::string            name_;
   std::vector<FieldMeta> trx_fields_;
-  std::vector<FieldMeta> fields_;  // 包含sys_fields
+  std::vector<FieldMeta> fields_;  // 包含sys_fields: trx_fields + null_field
   std::vector<IndexMeta> indexes_;
   StorageFormat          storage_format_;
 

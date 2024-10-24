@@ -13,6 +13,7 @@ See the Mulan PSL v2 for more details. */
 //
 
 #include "sql/stmt/update_stmt.h"
+#include "common/type/attr_type.h"
 #include "common/value.h"
 #include "sql/stmt/filter_stmt.h"
 #include "storage/db/db.h"
@@ -51,6 +52,7 @@ RC UpdateStmt::create(Db *db, const UpdateSqlNode &update, Stmt *&stmt)
   }
 
   if (field_meta->type() == update.value.attr_type()
+      || (field_meta->nullable() && update.value.attr_type() == AttrType::NULLS)
       || (field_meta->type() == AttrType::TEXTS && update.value.attr_type() == AttrType::CHARS)
       || (field_meta->type() == AttrType::DATES && update.value.attr_type() == AttrType::CHARS)) {
     /* skip */

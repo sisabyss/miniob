@@ -58,6 +58,10 @@ RC InsertStmt::create(Db *db, const InsertSqlNode &inserts, Stmt *&stmt)
     const AttrType field_type = field_meta->type();
     const AttrType value_type = values[i].attr_type();
 
+    if (value_type == AttrType::NULLS && field_meta->nullable()) {
+      continue;
+    }
+
     if (field_type == AttrType::TEXTS) {
       if (value_type != AttrType::CHARS) {
         LOG_WARN("insert text field only support chars type");
