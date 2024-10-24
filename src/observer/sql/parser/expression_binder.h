@@ -39,6 +39,8 @@ public:
     return alias_map[alias].c_str();
   }
 
+  std::unordered_map<std::string, std::string> get_alias_map(){return alias_map;}
+
   Table *find_table(const char *table_name) const;
 
   const std::vector<Table *> &query_tables() const { return query_tables_; }

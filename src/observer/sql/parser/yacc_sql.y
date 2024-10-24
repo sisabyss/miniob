@@ -566,6 +566,22 @@ rel_attr:
       free($3);
       free($5);
     }
+    | ID ID{      //可能省略as关键词
+      $$ = new RelAttrSqlNode;
+      $$->attribute_name = $1;
+      $$->alias = $2;
+      free($1);
+      free($2);
+    }
+    | ID DOT ID ID{
+      $$ = new RelAttrSqlNode;
+      $$->relation_name  = $1;
+      $$->attribute_name = $3;
+      $$->alias = $4;
+      free($1);
+      free($3);
+      free($4);
+    }
     ;
 
 relation:
@@ -580,6 +596,13 @@ relation:
       $$->relation_alias = $3;
       free($1);
       free($3);
+    }
+    | ID ID{
+      $$ = new RelationInfo;
+      $$->relation_name = $1;
+      $$->relation_alias = $2;
+      free($1);
+      free($2);
     }
     ;
 rel_list:
