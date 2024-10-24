@@ -371,18 +371,6 @@ RC ArithmeticExpr::calc_value(const Value &left_value, const Value &right_value,
     return RC::SUCCESS;
   }
 
-  // 除零错误
-  if(right_value.attr_type() == AttrType::INTS && right_value.get_int() == 0){
-    value.set_type(AttrType::NULLS);
-    return RC::SUCCESS;
-  }
-
-  // 除零错误
-  if(right_value.attr_type() == AttrType::FLOATS && right_value.get_float() == 0.0f){
-    value.set_type(AttrType::NULLS);
-    return RC::SUCCESS;
-  }
-
   const AttrType target_type = value_type();
   value.set_type(target_type);
 
