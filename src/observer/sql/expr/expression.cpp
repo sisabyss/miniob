@@ -365,6 +365,24 @@ RC ArithmeticExpr::calc_value(const Value &left_value, const Value &right_value,
 {
   RC rc = RC::SUCCESS;
 
+  // 表达式一方存在 null，结果为null
+  if(left_value.attr_type() == AttrType::NULLS || right_value.attr_type() == AttrType::NULLS){
+    value.set_type(AttrType::NULLS);
+    return RC::SUCCESS;
+  }
+
+  // 除零错误
+  if(right_value.attr_type() == AttrType::INTS && right_value.get_int() == 0){
+    value.set_type(AttrType::NULLS);
+    return RC::SUCCESS;
+  }
+
+  // 除零错误
+  if(right_value.attr_type() == AttrType::FLOATS && right_value.get_float() == 0.0f){
+    value.set_type(AttrType::NULLS);
+    return RC::SUCCESS;
+  }
+
   const AttrType target_type = value_type();
   value.set_type(target_type);
 

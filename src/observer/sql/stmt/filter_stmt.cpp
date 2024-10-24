@@ -28,7 +28,7 @@ FilterStmt::~FilterStmt()
 }
 
 RC FilterStmt::create(Db *db, Table *default_table, std::unordered_map<std::string, Table *> *tables,
-    const ConditionSqlNode *conditions, int condition_num, FilterStmt *&stmt)
+    const ConditionSqlNode *conditions, int condition_num, FilterStmt *&stmt, ExpressionBinder& expression_binder)
 {
   RC rc = RC::SUCCESS;
   stmt  = nullptr;
@@ -37,7 +37,7 @@ RC FilterStmt::create(Db *db, Table *default_table, std::unordered_map<std::stri
   for (int i = 0; i < condition_num; i++) {
     FilterUnit *filter_unit = nullptr;
 
-    rc = create_filter_unit(db, default_table, tables, conditions[i], filter_unit);
+    rc = create_filter_unit(db, default_table, tables, conditions[i], filter_unit, expression_binder);
     if (rc != RC::SUCCESS) {
       delete tmp_stmt;
       LOG_WARN("failed to create filter unit. condition index=%d", i);
@@ -79,7 +79,8 @@ RC get_table_and_field(Db *db, Table *default_table, std::unordered_map<std::str
 }
 
 RC FilterStmt::create_filter_unit(Db *db, Table *default_table, std::unordered_map<std::string, Table *> *tables,
-    const ConditionSqlNode &condition, FilterUnit *&filter_unit)
+    const ConditionSqlNode &condition, FilterUnit *&filter_unit,  ExpressionBinder& expression_binder)
+
 {
   RC rc = RC::SUCCESS;
 
@@ -97,16 +98,27 @@ RC FilterStmt::create_filter_unit(Db *db, Table *default_table, std::unordered_m
     rc                     = get_table_and_field(db, default_table, tables, condition.left_attr, table, field);
     if (rc != RC::SUCCESS) {
       LOG_WARN("cannot find attr");
-      delete filter_unit;
       return rc;
     }
     FilterObj filter_obj;
     filter_obj.init_attr(Field(table, field));
     filter_unit->set_left(filter_obj);
-  } else {
+  }
+  else if(condition.left_is_value){
     FilterObj filter_obj;
     filter_obj.init_value(condition.left_value);
     filter_unit->set_left(filter_obj);
+  }
+  else{
+    FilterObj filter_obj;
+
+    // 递归地为表达式绑定
+    vector<unique_ptr<Expression>> bound_expressions;
+    std::unique_ptr<Expression> tmp(condition.left_arith_exper);
+    expression_binder.bind_expression(tmp, bound_expressions);
+
+    filter_obj.init_arith(bound_expressions.front());
+    filter_unit -> set_left(filter_obj);
   }
 
   if (condition.right_is_attr) {
@@ -114,17 +126,28 @@ RC FilterStmt::create_filter_unit(Db *db, Table *default_table, std::unordered_m
     const FieldMeta *field = nullptr;
     rc                     = get_table_and_field(db, default_table, tables, condition.right_attr, table, field);
     if (rc != RC::SUCCESS) {
-      delete filter_unit;
       LOG_WARN("cannot find attr");
       return rc;
     }
     FilterObj filter_obj;
     filter_obj.init_attr(Field(table, field));
     filter_unit->set_right(filter_obj);
-  } else {
+  }
+  else if(condition.right_is_value){
     FilterObj filter_obj;
     filter_obj.init_value(condition.right_value);
     filter_unit->set_right(filter_obj);
+  }
+  else{
+
+    // 递归地为表达式绑定
+    vector<unique_ptr<Expression>> bound_expressions;
+    std::unique_ptr<Expression> tmp(condition.right_arith_exper);
+    expression_binder.bind_expression(tmp, bound_expressions);
+
+    FilterObj filter_obj;
+    filter_obj.init_arith(bound_expressions.front());
+    filter_unit -> set_right(filter_obj);
   }
 
   filter_unit->set_comp(comp);

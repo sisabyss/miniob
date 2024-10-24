@@ -472,7 +472,20 @@ value_list:
     }
     ;
 value:
-    NULL_SYM {
+    '-' value{
+      if($2->attr_type() == AttrType::INTS){
+        $$ = new Value(-1 * int($2->get_int()));
+      }
+      else if($2->attr_type() == AttrType::FLOATS){
+        $$ = new Value(-1.0f * float($2->get_float()));
+      }
+      else{
+        yyerror (&yylloc, sql_string, sql_result, scanner, YY_("Cannot use negative operator to not number or not float one"));
+        YYERROR;
+      }
+      delete $2;
+    }
+    | NULL_SYM {
       $$ = new Value(std::nullopt);
       // NOTE: check this:
       // @$ = @1;
@@ -583,7 +596,11 @@ expression_list:
     }
     ;
 expression:
-    expression '+' expression {
+    '-' expression %prec UMINUS {
+      ValueExpr* vepr = new ValueExpr(Value((int)0));
+      $$ = create_arithmetic_expression(ArithmeticExpr::Type::SUB, vepr, $2, sql_string, &@$);
+    }
+    | expression '+' expression {
       $$ = create_arithmetic_expression(ArithmeticExpr::Type::ADD, $1, $3, sql_string, &@$);
     }
     | expression '-' expression {
@@ -598,9 +615,6 @@ expression:
     | LBRACE expression RBRACE {
       $$ = $2;
       $$->set_name(token_name(sql_string, &@$));
-    }
-    | '-' expression %prec UMINUS {
-      $$ = create_arithmetic_expression(ArithmeticExpr::Type::NEGATIVE, $2, nullptr, sql_string, &@$);
     }
     | value {
       $$ = new ValueExpr(*$1);
@@ -763,53 +777,61 @@ condition_list:
     }
     ;
 condition:
-    rel_attr comp_op value
-    {
-      $$ = new ConditionSqlNode;
-      $$->left_is_attr = 1;
-      $$->left_attr = *$1;
-      $$->right_is_attr = 0;
-      $$->right_value = *$3;
-      $$->comp = $2;
+     expression comp_op expression
+     {
+          $$ = new ConditionSqlNode;
+          // 说明是 () op () 型的算数表达式,$1类型为 ArithmeticExpr*
 
-      delete $1;
-      delete $3;
-    }
-    | value comp_op value 
-    {
-      $$ = new ConditionSqlNode;
-      $$->left_is_attr = 0;
-      $$->left_value = *$1;
-      $$->right_is_attr = 0;
-      $$->right_value = *$3;
-      $$->comp = $2;
+          if($1->type() == ExprType::ARITHMETIC){
+              ArithmeticExpr* a1 = static_cast<ArithmeticExpr*> ($1);
+              $$ -> left_arith_exper = a1;
+              $$ -> left_is_value = 0;
+              $$ -> left_is_attr = 0;
+          }else if($1->type() == ExprType::VALUE){
+              ValueExpr* ve = static_cast<ValueExpr*>($1);
+              $$->left_is_value = 1;
+              $$->left_is_attr  = 0;
+              $$->left_value = ve->get_value();
+              delete $1;
+          }else if($1->type() == ExprType::UNBOUND_FIELD){
+              UnboundFieldExpr* ufe = static_cast<UnboundFieldExpr*>($1);
+              RelAttrSqlNode node = RelAttrSqlNode();
+              node.relation_name = ufe->table_name();
+              node.attribute_name = ufe->field_name();
 
-      delete $1;
-      delete $3;
-    }
-    | rel_attr comp_op rel_attr
-    {
-      $$ = new ConditionSqlNode;
-      $$->left_is_attr = 1;
-      $$->left_attr = *$1;
-      $$->right_is_attr = 1;
-      $$->right_attr = *$3;
-      $$->comp = $2;
+              $$->left_is_value = 0;
+              $$->left_is_attr  = 1;
+              $$->left_attr = node;
+              delete $1;
+          }
 
-      delete $1;
-      delete $3;
-    }
-    | value comp_op rel_attr
-    {
-      $$ = new ConditionSqlNode;
-      $$->left_is_attr = 0;
-      $$->left_value = *$1;
-      $$->right_is_attr = 1;
-      $$->right_attr = *$3;
-      $$->comp = $2;
+          if($3->type() == ExprType::ARITHMETIC){
+              ArithmeticExpr* a2 = static_cast<ArithmeticExpr*> ($3);
+              $$ -> right_arith_exper = a2;
+              $$ -> right_is_value = 0;
+              $$ -> right_is_attr = 0;
+          }
+          else if($3->type() == ExprType::VALUE){
+              ValueExpr* ve = static_cast<ValueExpr*>($3);
+              $$->right_is_value = 1;
+              $$->right_is_attr  = 0;
+              $$->right_value = ve->get_value();
 
-      delete $1;
-      delete $3;
+              delete $3;
+          }
+          else if($3->type() == ExprType::UNBOUND_FIELD){
+              UnboundFieldExpr* ufe = static_cast<UnboundFieldExpr*>($3);
+              RelAttrSqlNode node = RelAttrSqlNode();
+              node.relation_name = ufe->table_name();
+              node.attribute_name = ufe->field_name();
+
+              $$->right_is_value = 0;
+              $$->right_is_attr  = 1;
+              $$->right_attr = node;
+              delete $3;
+          }
+
+          $$->comp = $2;
     }
     | rel_attr IS_SYM NULL_SYM
     {
