@@ -126,7 +126,7 @@ RC ComparisonExpr::compare_value(const Value &left, const Value &right, bool &re
 {
   RC  rc         = RC::SUCCESS;
 
-  LOG_INFO("ComparisionExpr::compare_value: %s <=> %s.", left.to_string().data(), right.to_string().data());
+  LOG_TRACE("ComparisionExpr::compare_value: %s <=> %s.", left.to_string().data(), right.to_string().data());
 
   // LIKE and NOT LIKE Expression
   if (comp() == LIKE_OP || comp() == NO_LIKE_OP) {
