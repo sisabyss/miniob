@@ -16,6 +16,7 @@ See the Mulan PSL v2 for more details. */
 
 #include "sql/expr/expression.h"
 #include "sql/parser/parse_defs.h"
+#include "sql/parser/expression_binder.h"
 #include "sql/stmt/stmt.h"
 #include <unordered_map>
 #include <vector>
@@ -27,19 +28,31 @@ class FieldMeta;
 struct FilterObj
 {
   bool  is_attr;
+  bool is_value;
   Field field;
   Value value;
+  ArithmeticExpr* arith_exper_;
+  Expression* arith_bound_exper_;
 
   void init_attr(const Field &field)
   {
     is_attr     = true;
+    is_value    = false;
     this->field = field;
   }
 
   void init_value(const Value &value)
   {
     is_attr     = false;
+    is_value    = true;
     this->value = value;
+  }
+
+  void init_arith(unique_ptr<Expression>& abe){
+    is_attr = false;
+    is_value = false;
+    this->arith_bound_exper_ = abe.get();
+    abe.release();
   }
 };
 
@@ -80,10 +93,10 @@ public:
 
 public:
   static RC create(Db *db, Table *default_table, std::unordered_map<std::string, Table *> *tables,
-      const ConditionSqlNode *conditions, int condition_num, FilterStmt *&stmt);
+      const ConditionSqlNode *conditions, int condition_num, FilterStmt *&stmt, ExpressionBinder& expression_binder);
 
   static RC create_filter_unit(Db *db, Table *default_table, std::unordered_map<std::string, Table *> *tables,
-      const ConditionSqlNode &condition, FilterUnit *&filter_unit);
+      const ConditionSqlNode &condition, FilterUnit *&filter_unit, ExpressionBinder& expression_binder);
 
 private:
   std::vector<FilterUnit *> filter_units_;  // 默认当前都是AND关系
