@@ -479,11 +479,7 @@ RC Table::set_value_to_record(char *record_data, const Value &value, const Field
 
   if (field->type() == AttrType::TEXTS) {
     Text text;
-#ifdef __TEST__
     text.len = std::min(MAX_TEXT_LENGTH, value.length());
-#else
-    text.len = value.length();
-#endif
     new_text(&text.id, value.data(), text.len);
     memcpy(record_data + field->offset(), &text, sizeof(text));
     return RC::SUCCESS;

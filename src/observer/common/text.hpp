@@ -15,11 +15,7 @@ See the Mulan PSL v2 for more details. */
 #include <cstddef>
 #include <string>
 
-#ifdef __TEST__
 static constexpr int MAX_TEXT_LENGTH = 4096;
-#else
-static constexpr int MAX_TEXT_LENGTH = 65535;
-#endif
 
 struct Text {
     size_t id;
