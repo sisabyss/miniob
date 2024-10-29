@@ -14,6 +14,26 @@ See the Mulan PSL v2 for more details. */
 #include "common/type/attr_type.h"
 #include "common/value.h"
 
+RC DateType::max(const Value &left, const Value &right, Value &result) const{
+  Date const left_date = left.get_date(), right_date = right.get_date();
+  if (compare_date(left_date, right_date) >= 0) {
+    result.set_date(left_date);
+  } else {
+    result.set_date(right_date);
+  }
+  return RC::SUCCESS;
+}
+
+RC DateType::min(const Value &left, const Value &right, Value &result) const{
+  Date const left_date = left.get_date(), right_date = right.get_date();
+  if (compare_date(left_date, right_date) < 0) {
+    result.set_date(left_date);
+  } else {
+    result.set_date(right_date);
+  }
+  return RC::SUCCESS;
+}
+
 int DateType::compare(const Value &left, const Value &right) const
 {
   ASSERT(left.attr_type() == AttrType::DATES && right.attr_type() == AttrType::DATES, "invalid type");
