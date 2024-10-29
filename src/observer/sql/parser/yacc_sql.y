@@ -433,6 +433,9 @@ opt_null:
     | NULLABLE_SYM {
       $$ = true;
     }
+    | NULL_SYM {
+      $$ = true;
+    }
     | NOT NULL_SYM {
       $$ = false;
     }
@@ -493,9 +496,9 @@ value:
       delete $2;
     }
     | NULL_SYM {
-      $$ = new Value(std::nullopt);
-      // NOTE: check this:
-      // @$ = @1;
+      $$ = new Value;
+      *($$) = Value::Null(); /* NULL value */
+      @$ = @1;
     }
     | NUMBER {
       $$ = new Value((int)$1);

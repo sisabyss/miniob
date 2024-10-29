@@ -15,7 +15,6 @@ See the Mulan PSL v2 for more details. */
 #include "sql/expr/aggregator.h"
 #include "common/log/log.h"
 #include "common/type/attr_type.h"
-#include <optional>
 
 RC MaxAggregator::accumulate(const Value &value)
 {
@@ -40,7 +39,7 @@ RC MaxAggregator::accumulate(const Value &value)
 RC MaxAggregator::evaluate(Value& result)
 {
   if (value_.attr_type() == AttrType::UNDEFINED || value_.attr_type() == AttrType::NULLS) {
-    result = Value(std::nullopt);
+    result = Value::Null(/* NULL */);
   } else {
     result = value_;
   }
@@ -70,7 +69,7 @@ RC MinAggregator::accumulate(const Value &value)
 RC MinAggregator::evaluate(Value& result)
 {
   if (value_.attr_type() == AttrType::UNDEFINED || value_.attr_type() == AttrType::NULLS) {
-    result = Value(std::nullopt);
+    result = Value::Null(/* NULL */);
   } else {
     result = value_;
   }
@@ -98,7 +97,7 @@ RC SumAggregator::accumulate(const Value &value)
 RC SumAggregator::evaluate(Value& result)
 {
   if (value_.attr_type() == AttrType::UNDEFINED || value_.attr_type() == AttrType::NULLS) {
-    result = Value(std::nullopt);
+    result = Value::Null(/* NULL */);
   } else {
     result = value_;
   }
@@ -137,7 +136,7 @@ RC AvgAggregator::accumulate(const Value &value)
 RC AvgAggregator::evaluate(Value& result)
 {
   if (value_.attr_type() == AttrType::UNDEFINED || value_.attr_type() == AttrType::NULLS) {
-    result = Value(std::nullopt);
+    result = Value::Null(/* NULL */);
   } else {
     result = value_;
   }

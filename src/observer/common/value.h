@@ -41,13 +41,18 @@ public:
   friend class DateType;
   friend class NullType;
 
-  Value() = default;
+  explicit Value() = default;
+
+  static Value Null() {
+    Value v;
+    v.set_null();
+    return v;
+  }
 
   ~Value() { reset(); }
 
   Value(AttrType attr_type, char *data, int length = 4) : attr_type_(attr_type) { this->set_data(data, length); }
 
-  explicit Value(std::nullopt_t val);
   explicit Value(int val);
   explicit Value(float val);
   explicit Value(bool val);

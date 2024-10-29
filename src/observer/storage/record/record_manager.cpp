@@ -17,6 +17,7 @@ See the Mulan PSL v2 for more details. */
 #include "storage/common/condition_filter.h"
 #include "storage/trx/trx.h"
 #include "storage/clog/log_handler.h"
+#include <cstring>
 
 using namespace common;
 
@@ -353,35 +354,41 @@ RC RowRecordPageHandler::delete_record(const RID *rid)
 
 RC RowRecordPageHandler::update_record(const RID &rid, const char *data)
 {
-  ASSERT(rw_mode_ != ReadWriteMode::READ_ONLY, "cannot delete record from page while the page is readonly");
+  // 确保页面非只读模式
+  ASSERT(rw_mode_ != ReadWriteMode::READ_ONLY, "Cannot update record on a read-only page");
 
+  // 检查记录 ID 是否有效，防止 slot_num 超出页面记录容量
   if (rid.slot_num >= page_header_->record_capacity) {
-    LOG_ERROR("Invalid slot_num %d, exceed page's record capacity, frame=%s, page_header=%s",
+    LOG_ERROR("Invalid slot_num %d; exceeds page's record capacity. frame=%s, page_header=%s",
               rid.slot_num, frame_->to_string().c_str(), page_header_->to_string().c_str());
     return RC::INVALID_ARGUMENT;
   }
 
   Bitmap bitmap(bitmap_, page_header_->record_capacity);
-  if (bitmap.get_bit(rid.slot_num)) {
-    frame_->mark_dirty();
 
-    char *record_data = get_record_data(rid.slot_num);
-    if (record_data == data) {
-      // nothing to do
-    } else {
-      memcpy(record_data, data, page_header_->record_real_size);
+  // 检查指定位置的 slot 是否已被使用
+  if (bitmap.get_bit(rid.slot_num)) {
+    frame_->mark_dirty();  // 标记页面为已修改
+
+    // 获取当前 slot 的记录数据指针
+    char* record_data = get_record_data(rid.slot_num);
+
+    // 若数据内容不同则进行复制更新
+    if (record_data != data) {
+      std::memcpy(record_data, data, page_header_->record_real_size);
     }
 
+    // 记录更新日志，忽略日志操作失败
     RC rc = log_handler_.update_record(frame_, rid, data);
     if (OB_FAIL(rc)) {
-      LOG_ERROR("Failed to update record. page_num %d:%d. rc=%s", 
+      LOG_ERROR("Failed to update record. page_num %d:%d. rc=%s",
                 disk_buffer_pool_->file_desc(), frame_->page_num(), strrc(rc));
-      // return rc; // ignore errors
     }
 
     return RC::SUCCESS;
   } else {
-    LOG_DEBUG("Invalid slot_num %d, slot is empty, page_num %d.", rid.slot_num, frame_->page_num());
+    // 若 slot 未使用则记录信息
+    LOG_DEBUG("Invalid slot_num %d; slot is empty. page_num %d.", rid.slot_num, frame_->page_num());
     return RC::RECORD_NOT_EXIST;
   }
 }
