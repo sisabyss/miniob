@@ -16,6 +16,7 @@ See the Mulan PSL v2 for more details. */
 #include "common/lang/string.h"
 #include "common/log/log.h"
 #include "sql/stmt/filter_stmt.h"
+#include "sql/stmt/order_stmt.h"
 #include "storage/db/db.h"
 #include "storage/table/table.h"
 #include "sql/parser/expression_binder.h"
@@ -28,6 +29,11 @@ SelectStmt::~SelectStmt()
   if (nullptr != filter_stmt_) {
     delete filter_stmt_;
     filter_stmt_ = nullptr;
+  }
+
+  if (nullptr != orders_by_) {
+    delete orders_by_;
+    orders_by_ = nullptr;
   }
 }
 
@@ -101,6 +107,21 @@ RC SelectStmt::create(Db *db, SelectSqlNode &select_sql, Stmt *&stmt)
     return rc;
   }
 
+  // 创建排序stmt
+  OrderStmt* order_stmt = nullptr;
+  rc = OrderStmt::create(db,
+      default_table,
+      &table_map,
+      select_sql.order_sql_nodes.data(),
+      static_cast<int>(select_sql.order_sql_nodes.size()),
+      order_stmt,
+      expression_binder
+      );
+  if (rc != RC::SUCCESS) {
+    LOG_WARN("cannot construct order by stmt");
+    return rc;
+  }
+
   // everything alright
   SelectStmt *select_stmt = new SelectStmt();
 
@@ -108,6 +129,7 @@ RC SelectStmt::create(Db *db, SelectSqlNode &select_sql, Stmt *&stmt)
   select_stmt->query_expressions_.swap(bound_expressions);
   select_stmt->filter_stmt_ = filter_stmt;
   select_stmt->group_by_.swap(group_by_expressions);
+  select_stmt->orders_by_   = order_stmt;
   stmt                      = select_stmt;
   return RC::SUCCESS;
 }

@@ -31,6 +31,14 @@ See the Mulan PSL v2 for more details. */
 
 class Table;
 
+enum TupleType {
+  DEFAULT_TUPLE,
+  ROW_TUPLE,
+  PROJECT_TUPLE,
+  VALUELIST_TUPLE,
+  JOINED_TUPLE
+};
+
 /**
  * @defgroup Tuple
  * @brief Tuple 元组，表示一行数据，当前返回客户端时使用
@@ -75,6 +83,8 @@ class Tuple
 public:
   Tuple()          = default;
   virtual ~Tuple() = default;
+
+  virtual TupleType getType() { return TupleType::DEFAULT_TUPLE; }
 
   /**
    * @brief 获取元组中的Cell的个数
@@ -174,6 +184,9 @@ public:
     }
     speces_.clear();
   }
+
+  TupleType getType() override { return TupleType::ROW_TUPLE; }
+
 
   void set_record(Record *record)
   {
@@ -291,6 +304,8 @@ public:
   ProjectTuple()          = default;
   virtual ~ProjectTuple() = default;
 
+  virtual TupleType getType() override { return TupleType::PROJECT_TUPLE; }
+
   void set_expressions(std::vector<std::unique_ptr<Expression>> &&expressions)
   {
     expressions_ = std::move(expressions);
@@ -348,6 +363,8 @@ class ValueListTuple : public Tuple
 public:
   ValueListTuple()          = default;
   virtual ~ValueListTuple() = default;
+
+  virtual TupleType getType() override { return TupleType::VALUELIST_TUPLE; }
 
   void set_names(const std::vector<TupleCellSpec> &specs) { specs_ = specs; }
   void set_cells(const std::vector<Value> &cells) { cells_ = cells; }
@@ -426,6 +443,8 @@ class JoinedTuple : public Tuple
 public:
   JoinedTuple()          = default;
   virtual ~JoinedTuple() = default;
+
+  virtual TupleType getType() override { return TupleType::JOINED_TUPLE; }
 
   void set_left(Tuple *left) { left_ = left; }
   void set_right(Tuple *right) { right_ = right; }

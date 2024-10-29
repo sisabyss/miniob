@@ -127,11 +127,15 @@ UnboundAggregateExpr *create_aggregate_expression(const char *aggregate_name,
         LIKE
         NULL_SYM
         NULLABLE_SYM
+        ORDER
+        ASC
 
 /** union 中定义各种数据类型，真实生成的代码也是union类型，所以不能有非POD类型的数据 **/
 %union {
   ParsedSqlNode *                            sql_node;
   ConditionSqlNode *                         condition;
+  OrderSqlNode *                             order_by;
+  std::vector<OrderSqlNode> *                order_by_list;
   Value *                                    value;
   enum CompOp                                comp;
   RelAttrSqlNode *                           rel_attr;
@@ -157,6 +161,9 @@ UnboundAggregateExpr *create_aggregate_expression(const char *aggregate_name,
 //非终结符
 
 /** type 定义了各种解析后的结果输出的是什么类型。类型对应了 union 中的定义的成员变量名称 **/
+%type <order_by>            order_by
+%type <order_by_list>       order_by_list
+%type <order_by_list>       opt_order_by
 %type <number>              type
 %type <condition>           condition
 %type <value>               value
@@ -545,7 +552,7 @@ update_stmt:      /*  update 语句的语法解析树*/
     }
     ;
 select_stmt:        /*  select 语句的语法解析树*/
-    SELECT expression_list FROM table_ref_list where group_by
+    SELECT expression_list FROM table_ref_list where group_by opt_order_by
     {
       $$ = new ParsedSqlNode(SCF_SELECT);
       if ($2 != nullptr) {
@@ -568,8 +575,82 @@ select_stmt:        /*  select 语句的语法解析树*/
         $$->selection.group_by.swap(*$6);
         delete $6;
       }
+
+      if ($7 != nullptr) {
+        $$->selection.order_sql_nodes.swap(*$7);
+        delete $7;
+      }
     }
     ;
+
+opt_order_by:
+  {
+    $$ = nullptr;   // empty
+  }
+  | ORDER BY order_by_list
+  {
+    $$ = $3;
+  }
+  ;
+
+order_by_list:
+  order_by
+  {
+    $$ = new std::vector<OrderSqlNode>;
+    $$->emplace_back(*$1);
+    delete $1;
+  }
+  | order_by COMMA order_by_list
+  {
+    if ($3 != nullptr) {
+        $$ = $3;
+    }else {
+        $$ = new std::vector<OrderSqlNode>;
+    }
+    $$->emplace($$->begin(), *$1);
+    delete $1;
+  }
+  ;
+
+order_by:
+  expression
+  {
+    if($1 == nullptr || $1->type() != ExprType::UNBOUND_FIELD){
+        delete $1;
+        yyerror (&yylloc, sql_string, sql_result, scanner, YY_("syntax error: order by field is invalid"));
+        YYERROR;
+    }
+    $$ = new OrderSqlNode();
+    $$->inc_order = true;
+    $$->unbound_field_expr_ = $1;
+    $1 = nullptr;
+  }
+  | expression ASC
+  {
+    if($1 == nullptr || $1->type() != ExprType::UNBOUND_FIELD){
+        delete $1;
+        yyerror (&yylloc, sql_string, sql_result, scanner, YY_("syntax error: order by field is invalid"));
+        YYERROR;
+    }
+    $$ = new OrderSqlNode();
+    $$->inc_order = true;
+    $$->unbound_field_expr_ = $1;
+    $1 = nullptr;
+  }
+  | expression DESC
+  {
+   if($1 == nullptr || $1->type() != ExprType::UNBOUND_FIELD){
+        delete $1;
+        yyerror (&yylloc, sql_string, sql_result, scanner, YY_("syntax error: order by field is invalid"));
+        YYERROR;
+    }
+    $$ = new OrderSqlNode();
+    $$->inc_order = false;
+    $$->unbound_field_expr_ = $1;
+    $1 = nullptr;
+  }
+  ;
+
 calc_stmt:
     CALC expression_list
     {
