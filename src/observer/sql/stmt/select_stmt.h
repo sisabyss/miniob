@@ -23,6 +23,7 @@ See the Mulan PSL v2 for more details. */
 
 class FieldMeta;
 class FilterStmt;
+class OrderStmt;
 class Db;
 class Table;
 
@@ -44,6 +45,7 @@ public:
 public:
   const std::vector<Table *> &tables() const { return tables_; }
   FilterStmt                 *filter_stmt() const { return filter_stmt_; }
+  OrderStmt                  *order_stmt()  const { return orders_by_; }
 
   std::vector<std::unique_ptr<Expression>> &query_expressions() { return query_expressions_; }
   std::vector<std::unique_ptr<Expression>> &group_by() { return group_by_; }
@@ -52,5 +54,6 @@ private:
   std::vector<std::unique_ptr<Expression>> query_expressions_;
   std::vector<Table *>                     tables_;
   FilterStmt                              *filter_stmt_ = nullptr;
+  OrderStmt                               *orders_by_ = nullptr;
   std::vector<std::unique_ptr<Expression>> group_by_;
 };
