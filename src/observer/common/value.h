@@ -41,7 +41,13 @@ public:
   friend class DateType;
   friend class NullType;
 
-  explicit Value();
+  explicit Value() = default;
+
+  static Value Null() {
+    Value v;
+    v.set_null();
+    return v;
+  }
 
   ~Value() { reset(); }
 

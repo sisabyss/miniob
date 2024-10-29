@@ -433,6 +433,9 @@ opt_null:
     | NULLABLE_SYM {
       $$ = true;
     }
+    | NULL_SYM {
+      $$ = true;
+    }
     | NOT NULL_SYM {
       $$ = false;
     }
@@ -493,7 +496,8 @@ value:
       delete $2;
     }
     | NULL_SYM {
-      $$ = new Value(); /* NULL value */
+      $$ = new Value;
+      *($$) = Value::Null(); /* NULL value */
       @$ = @1;
     }
     | NUMBER {

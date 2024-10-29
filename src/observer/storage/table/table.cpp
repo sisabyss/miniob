@@ -686,6 +686,16 @@ RC Table::update_record(Record &record, Field const &field, Value const &value) 
   const int sys_field_num = table_meta_.sys_field_num();
   const int field_index = field.meta()->field_id() + sys_field_num;
 
+  // pre-update stage: record value has not been modified
+  /*
+  rc = delete_entry_of_indexes(record.data(), record.rid(), false);
+  if (OB_FAIL(rc)) {
+    LOG_ERROR("failed to delete index of record: %s", strrc(rc));
+    return rc;
+  }
+  */
+
+  // update stage
   const FieldMeta *null_bitmap_field = table_meta_.null_field();
   common::Bitmap null_bitmap(record.data() + null_bitmap_field->offset(), null_bitmap_field->len());
   if (value.attr_type() == AttrType::NULLS) {
@@ -704,11 +714,9 @@ RC Table::update_record(Record &record, Field const &field, Value const &value) 
       }
     }
   }
-  if (OB_FAIL(rc)) {
-    LOG_WARN("failed to update record. table name:%s", table_meta_.name());
-    return rc;
-  }
 
+  // pro-update stage
+  /*
   if (find_index_by_field(field.field_name())) {
     rc = insert_entry_of_indexes(record.data(), record.rid());
     if (OB_FAIL(rc)) {
@@ -716,6 +724,7 @@ RC Table::update_record(Record &record, Field const &field, Value const &value) 
       return rc;
     }
   }
+  */
 
   rc = record_handler_->update_record(record.data(), &record.rid());
   if (OB_FAIL(rc)) {
