@@ -21,7 +21,7 @@ See the Mulan PSL v2 for more details. */
 #include "common/log/log.h"
 #include "common/type/attr_type.h"
 
-Value::Value(std::nullopt_t val) { set_null(); }
+Value::Value() { set_null(); }
 
 Value::Value(int val) { set_int(val); }
 

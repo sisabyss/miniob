@@ -493,9 +493,8 @@ value:
       delete $2;
     }
     | NULL_SYM {
-      $$ = new Value(std::nullopt);
-      // NOTE: check this:
-      // @$ = @1;
+      $$ = new Value(); /* NULL value */
+      @$ = @1;
     }
     | NUMBER {
       $$ = new Value((int)$1);
