@@ -21,7 +21,6 @@ See the Mulan PSL v2 for more details. */
 #include "common/type/attr_type.h"
 #include "common/type/data_type.h"
 #include <cstdint>
-#include <optional>
 
 /**
  * @brief 属性的值

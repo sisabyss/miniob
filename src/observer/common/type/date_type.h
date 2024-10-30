@@ -22,17 +22,21 @@ See the Mulan PSL v2 for more details. */
 class DateType : public DataType
 {
 public:
-    DateType() : DataType(AttrType::DATES) {}
+  DateType() : DataType(AttrType::DATES) {}
 
-    virtual ~DateType() = default;
+  virtual ~DateType() = default;
 
-    int compare(const Value &left, const Value &right) const override;
+  RC max(const Value &left, const Value &right, Value &result) const override;
 
-    RC cast_to(const Value &val, AttrType type, Value &result) const override;
+  RC min(const Value &left, const Value &right, Value &result) const override;
 
-    int cast_cost(AttrType type) override;
+  int compare(const Value &left, const Value &right) const override;
 
-    RC to_string(const Value &val, string &result) const override;
+  RC cast_to(const Value &val, AttrType type, Value &result) const override;
+
+  int cast_cost(AttrType type) override;
+
+  RC to_string(const Value &val, string &result) const override;
 };
 
 #endif // DATE_TYPE_H_
