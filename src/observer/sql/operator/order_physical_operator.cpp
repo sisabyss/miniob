@@ -1,5 +1,6 @@
 #include "sql/operator/order_physical_operator.h"
 #include "common/log/log.h"
+#include "common/type/attr_type.h"
 #include "sql/expr/tuple.h"
 #include "sql/stmt/order_stmt.h"
 #include "storage/field/field.h"
@@ -9,43 +10,44 @@
 class cmp
 {
 private:
-    vector<bool> sortRules; // 多少个SortUnit 就有多少个规则，大于0表示升序
+  vector<bool> sortRules; // 多少个SortUnit 就有多少个规则，大于0表示升序
 public:
-    cmp(vector<bool> const &sortRules){
-        this->sortRules = sortRules;
+  cmp(vector<bool> const &sortRules){
+    this->sortRules = sortRules;
+  }
+
+  bool operator () (SortTarget A, SortTarget B) const {     // whether B should put ahead of A
+    for(size_t i = 0; i < sortRules.size(); i++ ){
+      // 获得当前排序规则
+      bool rule = sortRules.at(i);
+
+      // 取出 A 和 B 当前value
+      Value va = A.value.at(i);
+      Value vb = B.value.at(i);
+
+      // 获得 A 和 B 的类型
+      AttrType aa = va.attr_type();
+      AttrType ba = vb.attr_type();
+
+      if (aa == AttrType::NULLS && ba == AttrType::NULLS) {
+        continue;
+      } else if (aa == AttrType::NULLS) {
+        return rule ? true : false;
+      } else if (ba == AttrType::NULLS) {
+        return rule ? false : true;
+      } else{
+        int cmpRes = va.compare(vb);
+        // -1  ->  left < right
+        // 0   ->  left = right
+        // 1   ->  left > right
+
+        if(cmpRes == 0){ continue; }
+        if(cmpRes == 1){ return rule? false:true;}
+        return rule? true:false;
+      }
     }
-
-    bool operator () (SortTarget A, SortTarget B) const {     // whether B should put ahead of A
-        for(size_t i = 0; i < sortRules.size(); i++ ){
-            // 获得当前排序规则
-            bool rule = sortRules.at(i);
-
-            // 取出 A 和 B 当前value
-            Value va = A.value.at(i);
-            Value vb = B.value.at(i);
-
-            // 获得 A 和 B 的类型
-            AttrType aa = va.attr_type();
-            AttrType ba = vb.attr_type();
-            if(aa == AttrType::NULLS && ba != AttrType::NULLS){
-                return true;   // B在A后面
-            } else if(aa != AttrType::NULLS && ba == AttrType::NULLS){
-                return false;    // B在A前面
-            } else if(aa == AttrType::NULLS && ba == AttrType::NULLS){
-                continue;   // 都为空，则继续判断下一个条件
-            } else{
-                int cmpRes = va.compare(vb);
-                // -1  ->  left < right
-                // 0   ->  left = right
-                // 1   ->  left > right
-
-                if(cmpRes == 0){ continue; }
-                if(cmpRes == 1){ return rule? false:true;}
-                return rule? true:false;
-            }
-        }
-        return false;    // 所有条件都等于，保留原顺序
-    }
+    return false;    // 所有条件都等于，保留原顺序
+  }
 };
 
 RC OtherTuple2ValueListTuple(ValueListTuple *resTuple, Tuple* oriTuple){
