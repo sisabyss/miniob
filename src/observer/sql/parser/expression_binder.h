@@ -41,8 +41,11 @@ private:
 class ExpressionBinder
 {
 public:
-  ExpressionBinder(BinderContext &context) : context_(context) {}
+  ExpressionBinder(BinderContext const &context) : context_(context) {}
+  ExpressionBinder(BinderContext &&context) : context_(std::move(context)) {}
   virtual ~ExpressionBinder() = default;
+
+  ExpressionBinder(ExpressionBinder const &) = default;
 
   RC bind_expression(std::unique_ptr<Expression> &expr, std::vector<std::unique_ptr<Expression>> &bound_expressions);
 
@@ -67,5 +70,5 @@ private:
       std::unique_ptr<Expression> &aggregate_expr, std::vector<std::unique_ptr<Expression>> &bound_expressions);
 
 private:
-  BinderContext &context_;
+  BinderContext context_;
 };

@@ -65,20 +65,20 @@ RC UpdateStmt::create(Db *db, const UpdateSqlNode &update, Stmt *&stmt)
   // create filter statement in `where` statement
   FilterStmt *filter_stmt = nullptr;
 
-  BinderContext binder_context;
-  binder_context.add_table(table);
-  ExpressionBinder expression_binder(binder_context);
+  if (!update.conditions.empty()) {
+    BinderContext binder_context;
+    binder_context.add_table(table);
+    ExpressionBinder binder(binder_context);
 
-  rc          = FilterStmt::create(db,
-      table,
-      &table_map,
-      update.conditions.data(),
-      static_cast<int>(update.conditions.size()),
-      filter_stmt,
-      expression_binder);
-  if (rc != RC::SUCCESS) {
-    LOG_WARN("cannot construct filter stmt");
-    return rc;
+    rc          = FilterStmt::create(
+        binder,
+        update.conditions.data(),
+        static_cast<int>(update.conditions.size()),
+        filter_stmt);
+    if (rc != RC::SUCCESS) {
+      LOG_WARN("cannot construct filter stmt");
+      return rc;
+    }
   }
 
   // everything alright

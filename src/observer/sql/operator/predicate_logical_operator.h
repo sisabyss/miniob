@@ -14,8 +14,8 @@ See the Mulan PSL v2 for more details. */
 
 #pragma once
 
-#include "sql/expr/expression.h"
 #include "sql/operator/logical_operator.h"
+#include "storage/common/condition_filter.h"
 
 /**
  * @brief 谓词/过滤逻辑算子
@@ -24,8 +24,10 @@ See the Mulan PSL v2 for more details. */
 class PredicateLogicalOperator : public LogicalOperator
 {
 public:
-  PredicateLogicalOperator(std::unique_ptr<Expression> expression);
+  PredicateLogicalOperator(CompositeConditionFilter &&filters);
   virtual ~PredicateLogicalOperator() = default;
 
   LogicalOperatorType type() const override { return LogicalOperatorType::PREDICATE; }
+
+  CompositeConditionFilter filters_;
 };

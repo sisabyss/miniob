@@ -538,7 +538,7 @@ RC Table::init_text_handler(const char *base_dir)
 
 RC Table::get_record_scanner(RecordFileScanner &scanner, Trx *trx, ReadWriteMode mode)
 {
-  RC rc = scanner.open_scan(this, *data_buffer_pool_, trx, db_->log_handler(), mode, nullptr);
+  RC rc = scanner.open_scan(this, *data_buffer_pool_, trx, db_->log_handler(), mode);
   if (rc != RC::SUCCESS) {
     LOG_ERROR("failed to open scanner. rc=%s", strrc(rc));
   }

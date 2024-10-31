@@ -220,11 +220,7 @@ RC PhysicalPlanGenerator::create_plan(PredicateLogicalOperator &pred_oper, uniqu
     return rc;
   }
 
-  vector<unique_ptr<Expression>> &expressions = pred_oper.expressions();
-  ASSERT(expressions.size() == 1, "predicate logical operator's children should be 1");
-
-  unique_ptr<Expression> expression = std::move(expressions.front());
-  oper = unique_ptr<PhysicalOperator>(new PredicatePhysicalOperator(std::move(expression)));
+  oper = unique_ptr<PhysicalOperator>(new PredicatePhysicalOperator(std::move(pred_oper.filters_)));
   oper->add_child(std::move(child_phy_oper));
   return rc;
 }

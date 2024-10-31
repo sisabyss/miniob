@@ -13,8 +13,9 @@ See the Mulan PSL v2 for more details. */
 //
 
 #include "sql/operator/predicate_logical_operator.h"
+#include "storage/common/condition_filter.h"
 
-PredicateLogicalOperator::PredicateLogicalOperator(std::unique_ptr<Expression> expression)
-{
-  expressions_.emplace_back(std::move(expression));
-}
+
+PredicateLogicalOperator::PredicateLogicalOperator(CompositeConditionFilter &&filters)
+    : filters_(std::move(filters))
+{}

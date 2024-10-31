@@ -444,8 +444,7 @@ public:
    *                         删除时也需要遍历找到数据，然后删除，这时就需要加写锁
    * @param condition_filter 做一些初步过滤操作
    */
-  RC open_scan(Table *table, DiskBufferPool &buffer_pool, Trx *trx, LogHandler &log_handler, ReadWriteMode mode,
-      ConditionFilter *condition_filter);
+  RC open_scan(Table *table, DiskBufferPool &buffer_pool, Trx *trx, LogHandler &log_handler, ReadWriteMode mode);
 
   /**
    * @brief 关闭一个文件扫描，释放相应的资源
@@ -482,7 +481,6 @@ private:
   ReadWriteMode   rw_mode_ = ReadWriteMode::READ_WRITE;  ///< 遍历出来的数据，是否可能对它做修改
 
   BufferPoolIterator bp_iterator_;                    ///< 遍历buffer pool的所有页面
-  ConditionFilter   *condition_filter_    = nullptr;  ///< 过滤record
   RecordPageHandler *record_page_handler_ = nullptr;  ///< 处理文件某页面的记录
   RecordPageIterator record_page_iterator_;           ///< 遍历某个页面上的所有record
   Record             next_record_;                    ///< 获取的记录放在这里缓存起来
