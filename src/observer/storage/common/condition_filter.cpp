@@ -55,20 +55,28 @@ RC DefaultConditionFilter::init(const ConditionSqlNode &condition)
   RC rc = RC::SUCCESS;
 
   std::unique_ptr<Expression> left_bound_expr, right_bound_expr;
+  std::unique_ptr<Expression> left_unbound_expr(condition.left_expr);
+  std::unique_ptr<Expression> right_unbound_expr(condition.right_expr);
 
   // bind left expr
   {
     vector<unique_ptr<Expression>> bound_expressions;
-    std::unique_ptr<Expression> left_expr_ptr(condition.left_expr);
-    expr_binder_.bind_expression(left_expr_ptr, bound_expressions);
+    rc = expr_binder_.bind_expression(left_unbound_expr, bound_expressions);
+    if (OB_FAIL(rc)) {
+      LOG_WARN("failed to bind left hand expression, rc:%s", strrc(rc));
+      return rc;
+    }
     left_bound_expr = std::move(bound_expressions.front());
   }
 
   // bind right expr
   {
     vector<unique_ptr<Expression>> bound_expressions;
-    std::unique_ptr<Expression> right_expr_ptr(condition.right_expr);
-    expr_binder_.bind_expression(right_expr_ptr, bound_expressions);
+    rc = expr_binder_.bind_expression(right_unbound_expr, bound_expressions);
+    if (OB_FAIL(rc)) {
+      LOG_WARN("failed to bind left hand expression, rc:%s", strrc(rc));
+      return rc;
+    }
     right_bound_expr = std::move(bound_expressions.front());
   }
 
@@ -140,8 +148,13 @@ RC CompositeConditionFilter::add_filter(std::unique_ptr<ConditionFilter> &&filte
 }
 
 RC CompositeConditionFilter::add_filter(ExpressionBinder const &binder, const ConditionSqlNode &condition) {
+  RC rc = RC::SUCCESS;
   auto new_filter = std::make_unique<DefaultConditionFilter>(binder);
-  new_filter->init(condition);
+  rc = new_filter->init(condition);
+  if (OB_FAIL(rc)) {
+    LOG_WARN("failed to add filter: rc:%s", strrc(rc));
+    return rc;
+  }
   add_filter(std::move(new_filter));
   return RC::SUCCESS;
 }
@@ -153,6 +166,7 @@ RC CompositeConditionFilter::filter(Tuple *tuple, bool &res) const
     rc = filter->filter(tuple, res);
     if (OB_FAIL(rc)) {
       LOG_WARN("failed to filter in composite condition filter, rs:%s", strrc(rc));
+      return rc;
     }
     if (!res) return rc;
   }

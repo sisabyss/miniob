@@ -879,10 +879,10 @@ condition:
     ;
 is_null_comp:
     IS_SYM NULL_SYM {
-      return true;
+      $$ = true;
     }
     | IS_SYM NOT NULL_SYM {
-      return false;
+      $$ = false;
     }
     ;
 
