@@ -73,7 +73,7 @@ TEST_P(PaxRecordFileScannerWithParam, DISABLED_test_file_iterator)
   table.table_meta_.storage_format_ = StorageFormat::PAX_FORMAT;
   // no record
   // record iterator
-  rc = record_scanner.open_scan(&table, *bp, &trx, log_handler, ReadWriteMode::READ_ONLY, nullptr /*condition_filter*/);
+  rc = record_scanner.open_scan(&table, *bp, &trx, log_handler, ReadWriteMode::READ_ONLY);
   ASSERT_EQ(rc, RC::SUCCESS);
 
   int    count = 0;
@@ -114,7 +114,7 @@ TEST_P(PaxRecordFileScannerWithParam, DISABLED_test_file_iterator)
   }
 
   // record iterator
-  rc = record_scanner.open_scan(&table, *bp, &trx, log_handler, ReadWriteMode::READ_ONLY, nullptr /*condition_filter*/);
+  rc = record_scanner.open_scan(&table, *bp, &trx, log_handler, ReadWriteMode::READ_ONLY);
   ASSERT_EQ(rc, RC::SUCCESS);
 
   count = 0;
@@ -145,7 +145,7 @@ TEST_P(PaxRecordFileScannerWithParam, DISABLED_test_file_iterator)
   }
 
   // record iterator
-  rc = record_scanner.open_scan(&table, *bp, &trx, log_handler, ReadWriteMode::READ_ONLY, nullptr /*condition_filter*/);
+  rc = record_scanner.open_scan(&table, *bp, &trx, log_handler, ReadWriteMode::READ_ONLY);
   ASSERT_EQ(rc, RC::SUCCESS);
 
   count = 0;

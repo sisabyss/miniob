@@ -15,12 +15,14 @@ See the Mulan PSL v2 for more details. */
 #include "sql/operator/predicate_physical_operator.h"
 #include "common/log/log.h"
 #include "sql/stmt/filter_stmt.h"
+#include "storage/common/condition_filter.h"
 #include "storage/field/field.h"
 #include "storage/record/record.h"
 
-PredicatePhysicalOperator::PredicatePhysicalOperator(std::unique_ptr<Expression> expr) : expression_(std::move(expr))
+PredicatePhysicalOperator::PredicatePhysicalOperator(CompositeConditionFilter &&filters) : filters_(std::move(filters))
 {
-  ASSERT(expression_->value_type() == AttrType::BOOLEANS, "predicate's expression should be BOOLEAN type");
+  // TODO: should check value type or not?
+  // ASSERT(expression_->value_type() == AttrType::BOOLEANS, "predicate's expression should be BOOLEAN type");
 }
 
 RC PredicatePhysicalOperator::open(Trx *trx)
@@ -46,13 +48,13 @@ RC PredicatePhysicalOperator::next()
       break;
     }
 
-    Value value;
-    rc = expression_->get_value(*tuple, value);
+    bool filter_res;
+    rc = filters_.filter(tuple, filter_res);
     if (rc != RC::SUCCESS) {
       return rc;
     }
 
-    if (value.get_boolean()) {
+    if (filter_res) {
       return rc;
     }
   }

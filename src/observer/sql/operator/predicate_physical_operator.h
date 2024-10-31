@@ -16,6 +16,7 @@ See the Mulan PSL v2 for more details. */
 
 #include "sql/expr/expression.h"
 #include "sql/operator/physical_operator.h"
+#include "storage/common/condition_filter.h"
 
 class FilterStmt;
 
@@ -26,7 +27,7 @@ class FilterStmt;
 class PredicatePhysicalOperator : public PhysicalOperator
 {
 public:
-  PredicatePhysicalOperator(std::unique_ptr<Expression> expr);
+  PredicatePhysicalOperator(CompositeConditionFilter &&filters);
 
   virtual ~PredicatePhysicalOperator() = default;
 
@@ -41,5 +42,5 @@ public:
   RC tuple_schema(TupleSchema &schema) const override;
 
 private:
-  std::unique_ptr<Expression> expression_;
+  CompositeConditionFilter filters_;
 };

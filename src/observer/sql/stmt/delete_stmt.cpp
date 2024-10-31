@@ -30,6 +30,7 @@ DeleteStmt::~DeleteStmt()
 
 RC DeleteStmt::create(Db *db, const DeleteSqlNode &delete_sql, Stmt *&stmt)
 {
+  RC rc = RC::SUCCESS;
   const char *table_name = delete_sql.relation_name.c_str();
   if (nullptr == db || nullptr == table_name) {
     LOG_WARN("invalid argument. db=%p, table_name=%p", db, table_name);
@@ -47,15 +48,20 @@ RC DeleteStmt::create(Db *db, const DeleteSqlNode &delete_sql, Stmt *&stmt)
   table_map.insert(std::pair<std::string, Table *>(std::string(table_name), table));
 
   FilterStmt *filter_stmt = nullptr;
-  BinderContext binder_context;
-  binder_context.add_table(table);
-  ExpressionBinder expression_binder(binder_context);
+  if (!delete_sql.conditions.empty()) {
+    BinderContext binder_context;
+    binder_context.add_table(table);
+    ExpressionBinder binder(binder_context);
 
-  RC          rc          = FilterStmt::create(
-      db, table, &table_map, delete_sql.conditions.data(), static_cast<int>(delete_sql.conditions.size()), filter_stmt, expression_binder);
-  if (rc != RC::SUCCESS) {
-    LOG_WARN("failed to create filter statement. rc=%d:%s", rc, strrc(rc));
-    return rc;
+    rc          = FilterStmt::create(
+        binder,
+        delete_sql.conditions.data(),
+        static_cast<int>(delete_sql.conditions.size()),
+        filter_stmt);
+    if (rc != RC::SUCCESS) {
+      LOG_WARN("failed to create filter statement. rc=%d:%s", rc, strrc(rc));
+      return rc;
+    }
   }
 
   stmt = new DeleteStmt(table, filter_stmt);

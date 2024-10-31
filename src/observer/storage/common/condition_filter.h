@@ -14,18 +14,15 @@ See the Mulan PSL v2 for more details. */
 
 #pragma once
 
+#include "common/type/attr_type.h"
+#include "sql/parser/expression_binder.h"
 #include "sql/parser/parse.h"
+#include "sql/expr/expression.h"
+#include <memory>
+#include <vector>
 
 class Record;
 class Table;
-
-struct ConDesc
-{
-  bool  is_attr;      // 是否属性，false 表示是值
-  int   attr_length;  // 如果是属性，表示属性值长度
-  int   attr_offset;  // 如果是属性，表示在记录中的偏移量
-  Value value;        // 如果是值类型，这里记录值的数据
-};
 
 class ConditionFilter
 {
@@ -37,54 +34,63 @@ public:
    * @param rec
    * @return true means match condition, false means failed to match.
    */
-  virtual bool filter(const Record &rec) const = 0;
+  virtual RC filter(Tuple *tuple, bool &res) const = 0;
 };
 
+class ExpressionBinder;
 class DefaultConditionFilter : public ConditionFilter
 {
 public:
-  DefaultConditionFilter();
+  DefaultConditionFilter(ExpressionBinder const &binder)
+    : expr_binder_(binder) {};
   virtual ~DefaultConditionFilter();
 
-  RC init(const ConDesc &left, const ConDesc &right, AttrType attr_type, CompOp comp_op);
-  RC init(Table &table, const ConditionSqlNode &condition);
+  RC init(std::unique_ptr<Expression> &&left, std::unique_ptr<Expression> &&right, CompOp comp_op);
+  RC init(const ConditionSqlNode &condition);
 
-  virtual bool filter(const Record &rec) const;
+  virtual RC filter(Tuple *tuple, bool &res) const override;
 
 public:
-  const ConDesc &left() const { return left_; }
-  const ConDesc &right() const { return right_; }
+  BinderContext createBinderContext(Table *table);
+  const std::unique_ptr<Expression> &left() const { return left_expr_; }
+  const std::unique_ptr<Expression> &right() const { return right_expr_; }
+  const std::unique_ptr<ComparisonExpr> &cmp_expr() const { return cmp_expr_; }
 
   CompOp   comp_op() const { return comp_op_; }
-  AttrType attr_type() const { return attr_type_; }
+  AttrType attr_type() const
+  {
+    if (cmp_expr_ != nullptr) {
+      return cmp_expr_->value_type();
+    } else {
+      return AttrType::UNDEFINED;
+    }
+  }
 
 private:
-  ConDesc  left_;
-  ConDesc  right_;
-  AttrType attr_type_ = AttrType::UNDEFINED;
+  std::unique_ptr<Expression>     left_expr_;
+  std::unique_ptr<Expression>     right_expr_;
   CompOp   comp_op_   = NO_OP;
+  std::unique_ptr<ComparisonExpr> cmp_expr_;
+
+  ExpressionBinder expr_binder_;
 };
 
 class CompositeConditionFilter : public ConditionFilter
 {
 public:
   CompositeConditionFilter() = default;
+  CompositeConditionFilter(CompositeConditionFilter &&) = default;
   virtual ~CompositeConditionFilter();
 
-  RC init(const ConditionFilter *filters[], int filter_num);
-  RC init(Table &table, const ConditionSqlNode *conditions, int condition_num);
+  virtual RC filter(Tuple *tuple, bool &res) const override;
 
-  virtual bool filter(const Record &rec) const;
+  RC add_filter(std::unique_ptr<ConditionFilter> &&filter);
+  RC add_filter(ExpressionBinder const &binder, const ConditionSqlNode &condition);
 
 public:
-  int                    filter_num() const { return filter_num_; }
-  const ConditionFilter &filter(int index) const { return *filters_[index]; }
+  size_t                 filter_num() const { return filters_.size(); }
+  const ConditionFilter &filter(int index) const { return *filters_.at(index); }
 
 private:
-  RC init(const ConditionFilter *filters[], int filter_num, bool own_memory);
-
-private:
-  const ConditionFilter **filters_      = nullptr;
-  int                     filter_num_   = 0;
-  bool                    memory_owner_ = false;  // filters_的内存是否由自己来控制
+  std::vector<std::unique_ptr<ConditionFilter>> filters_;
 };

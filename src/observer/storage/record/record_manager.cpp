@@ -14,7 +14,6 @@ See the Mulan PSL v2 for more details. */
 #include "storage/record/record_manager.h"
 #include "common/log/log.h"
 #include "common/rc.h"
-#include "storage/common/condition_filter.h"
 #include "storage/trx/trx.h"
 #include "storage/clog/log_handler.h"
 #include <cstring>
@@ -726,7 +725,7 @@ RC RecordFileHandler::visit_record(const RID &rid, function<bool(Record &)> upda
 RecordFileScanner::~RecordFileScanner() { close_scan(); }
 
 RC RecordFileScanner::open_scan(Table *table, DiskBufferPool &buffer_pool, Trx *trx, LogHandler &log_handler,
-    ReadWriteMode mode, ConditionFilter *condition_filter)
+    ReadWriteMode mode)
 {
   close_scan();
 
@@ -741,7 +740,6 @@ RC RecordFileScanner::open_scan(Table *table, DiskBufferPool &buffer_pool, Trx *
     LOG_WARN("failed to init bp iterator. rc=%d:%s", rc, strrc(rc));
     return rc;
   }
-  condition_filter_ = condition_filter;
   if (table == nullptr || table->table_meta().storage_format() == StorageFormat::ROW_FORMAT) {
     record_page_handler_ = new RowRecordPageHandler();
   } else {
@@ -811,11 +809,6 @@ RC RecordFileScanner::fetch_next_record_in_page()
       return rc;
     }
 
-    // 如果有过滤条件，就用过滤条件过滤一下
-    if (condition_filter_ != nullptr && !condition_filter_->filter(next_record_)) {
-      continue;
-    }
-
     // 如果是某个事务上遍历数据，还要看看事务访问是否有冲突
     if (trx_ == nullptr) {
       return rc;
@@ -842,9 +835,6 @@ RC RecordFileScanner::close_scan()
     disk_buffer_pool_ = nullptr;
   }
 
-  if (condition_filter_ != nullptr) {
-    condition_filter_ = nullptr;
-  }
   if (record_page_handler_ != nullptr) {
     record_page_handler_->cleanup();
     delete record_page_handler_;

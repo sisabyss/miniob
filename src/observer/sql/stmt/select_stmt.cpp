@@ -39,6 +39,7 @@ SelectStmt::~SelectStmt()
 
 RC SelectStmt::create(Db *db, SelectSqlNode &select_sql, Stmt *&stmt)
 {
+  RC rc = RC::SUCCESS;
   if (nullptr == db) {
     LOG_WARN("invalid argument. db is null");
     return RC::INVALID_ARGUMENT;
@@ -95,16 +96,23 @@ RC SelectStmt::create(Db *db, SelectSqlNode &select_sql, Stmt *&stmt)
 
   // create filter statement in `where` statement
   FilterStmt *filter_stmt = nullptr;
-  RC          rc          = FilterStmt::create(db,
-      default_table,
-      &table_map,
-      select_sql.conditions.data(),
-      static_cast<int>(select_sql.conditions.size()),
-      filter_stmt,
-      expression_binder);
-  if (rc != RC::SUCCESS) {
-    LOG_WARN("cannot construct filter stmt");
-    return rc;
+  if (!select_sql.conditions.empty()) {
+    // init binder context
+    BinderContext binder_ctx;
+    for (auto *table : tables) {
+      binder_ctx.add_table(table);
+    }
+    ExpressionBinder binder(binder_ctx);
+
+    rc          = FilterStmt::create(
+        binder,
+        select_sql.conditions.data(),
+        static_cast<int>(select_sql.conditions.size()),
+        filter_stmt);
+    if (rc != RC::SUCCESS) {
+      LOG_WARN("cannot construct filter stmt");
+      return rc;
+    }
   }
 
   // 创建排序stmt
