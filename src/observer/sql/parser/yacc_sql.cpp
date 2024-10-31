@@ -2729,7 +2729,7 @@ yyreduce:
   case 106: /* is_null_comp: IS_SYM NULL_SYM  */
 #line 881 "yacc_sql.y"
                     {
-      return true;
+      (yyval.bools) = true;
     }
 #line 2735 "yacc_sql.cpp"
     break;
@@ -2737,7 +2737,7 @@ yyreduce:
   case 107: /* is_null_comp: IS_SYM NOT NULL_SYM  */
 #line 884 "yacc_sql.y"
                           {
-      return false;
+      (yyval.bools) = false;
     }
 #line 2743 "yacc_sql.cpp"
     break;
