@@ -21,16 +21,18 @@ See the Mulan PSL v2 for more details. */
 class BinderContext
 {
 public:
-  BinderContext()          = default;
+  BinderContext(const Db *db) : query_db_(db) {};
   virtual ~BinderContext() = default;
 
   void add_table(Table *table) { query_tables_.push_back(table); }
 
   Table *find_table(const char *table_name) const;
 
+  const Db *query_db() const { return query_db_; }
   const std::vector<Table *> &query_tables() const { return query_tables_; }
 
 private:
+  const Db            *query_db_;
   std::vector<Table *> query_tables_;
 };
 
@@ -68,6 +70,8 @@ private:
       std::unique_ptr<Expression> &arithmetic_expr, std::vector<std::unique_ptr<Expression>> &bound_expressions);
   RC bind_aggregate_expression(
       std::unique_ptr<Expression> &aggregate_expr, std::vector<std::unique_ptr<Expression>> &bound_expressions);
+  RC bind_subquery_expression(
+      std::unique_ptr<Expression> &subquery_expr, std::vector<std::unique_ptr<Expression>> &bound_expressions);
 
 private:
   BinderContext context_;

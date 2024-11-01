@@ -56,6 +56,10 @@ enum CompOp
   NO_LIKE_OP,   ///< "LIKE"
   IS_NULL_OP,   ///< "IS NULL"
   NOT_NULL_OP,  ///< "IS NOT NULL"
+  IN_OP,        ///< "IN"
+  NO_IN_OP,     ///< "NOT IN"
+  XST_OP,       ///< "EXISTS"
+  NO_XST_OP,    ///< "NOT EXISTS"
   NO_OP
 };
 

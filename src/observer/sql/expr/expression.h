@@ -17,10 +17,12 @@ See the Mulan PSL v2 for more details. */
 #include <memory>
 #include <string>
 
+#include "common/type/attr_type.h"
 #include "common/value.h"
 #include "storage/field/field.h"
 #include "sql/expr/aggregator.h"
 #include "storage/common/chunk.h"
+#include "storage/trx/trx.h"
 
 class Tuple;
 
@@ -47,6 +49,8 @@ enum class ExprType
   CONJUNCTION,  ///< 多个表达式使用同一种关系(AND或OR)来联结
   ARITHMETIC,   ///< 算术运算
   AGGREGATION,  ///< 聚合运算
+
+  SUBQUERY,     ///< 子查询运算
 };
 
 /**
@@ -72,6 +76,13 @@ public:
    * @brief 判断两个表达式是否相等
    */
   virtual bool equal(const Expression &other) const { return false; }
+
+  /**
+   * @brief 有些tuple需要访问物理算子，这里兼容物理算子的api
+   */
+  virtual RC open(Trx *) { return RC::SUCCESS; };
+  virtual RC close() { return RC::SUCCESS; };
+
   /**
    * @brief 根据具体的tuple，来计算当前表达式的值。tuple有可能是一个具体某个表的行数据
    */
@@ -82,6 +93,11 @@ public:
    * @details 有些表达式的值是固定的，比如ValueExpr，这种情况下可以直接获取值
    */
   virtual RC try_get_value(Value &value) const { return RC::UNIMPLEMENTED; }
+
+  /**
+   * @brief 由于子查询表达式可能为多值，这里添加一个api
+   */
+  virtual bool is_multi_valued(const Tuple &tuple) const { return false; };
 
   /**
    * @brief 从 `chunk` 中获取表达式的计算结果 `column`
@@ -467,4 +483,38 @@ public:
 private:
   Type                        aggregate_type_;
   std::unique_ptr<Expression> child_;
+};
+
+class SelectStmt;
+class LogicalOperator;
+class PhysicalOperator;
+class SubQueryExpr : public Expression
+{
+public:
+  SubQueryExpr(SelectSqlNode &&sql_node);
+  virtual ~SubQueryExpr() override = default;
+
+  RC open(Trx* trx) override;
+  RC close() override;
+  bool is_multi_valued(const Tuple &tuple) const override;
+  RC get_value(const Tuple &tuple, Value &value) const override;
+
+  ExprType type() const override;
+
+  AttrType value_type() const override;
+
+  RC build(const Db *db);
+
+private:
+  RC build_stmt(const Db *db);
+  RC build_logical_oper();
+  RC build_physical_oper();
+
+private:
+  AttrType value_type_ = AttrType::UNDEFINED;
+
+  std::unique_ptr<SelectSqlNode> sql_node_;
+  std::unique_ptr<SelectStmt> stmt_;
+  std::unique_ptr<LogicalOperator> logical_oper_;
+  std::unique_ptr<PhysicalOperator> physical_oper_;
 };

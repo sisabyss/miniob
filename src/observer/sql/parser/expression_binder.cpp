@@ -13,10 +13,12 @@ See the Mulan PSL v2 for more details. */
 //
 
 #include <algorithm>
+#include <memory>
 
 #include "common/log/log.h"
 #include "common/lang/string.h"
 #include "sql/parser/expression_binder.h"
+#include "sql/expr/expression.h"
 #include "sql/expr/expression_iterator.h"
 
 using namespace std;
@@ -90,6 +92,11 @@ RC ExpressionBinder::bind_expression(unique_ptr<Expression> &expr, vector<unique
 
     case ExprType::AGGREGATION: {
       ASSERT(false, "shouldn't be here");
+    } break;
+
+    case ExprType::SUBQUERY: {
+      LOG_WARN("bind subquery expression");
+      return bind_subquery_expression(expr, bound_expressions);
     } break;
 
     default: {
@@ -447,5 +454,26 @@ RC ExpressionBinder::bind_aggregate_expression(
   }
 
   bound_expressions.emplace_back(std::move(aggregate_expr));
+  return RC::SUCCESS;
+}
+
+RC ExpressionBinder::bind_subquery_expression(
+    unique_ptr<Expression> &expr, vector<unique_ptr<Expression>> &bound_expressions)
+{
+  if (nullptr == expr) {
+    return RC::SUCCESS;
+  }
+
+  std::unique_ptr<SubQueryExpr> subquery_expr(static_cast<SubQueryExpr*>(expr.release()));
+  expr.reset();
+
+  RC rc = subquery_expr->build(context_.query_db());
+  if (OB_FAIL(rc)) {
+    LOG_WARN("failed to bind subquery expression");
+    return rc;
+  }
+  LOG_INFO("subquery_expr bind success.");
+
+  bound_expressions.emplace_back(std::move(subquery_expr));
   return RC::SUCCESS;
 }

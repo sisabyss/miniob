@@ -31,7 +31,7 @@ UpdateStmt::~UpdateStmt()
   }
 }
 
-RC UpdateStmt::create(Db *db, const UpdateSqlNode &update, Stmt *&stmt)
+RC UpdateStmt::create(const Db *db, const UpdateSqlNode &update, Stmt *&stmt)
 {
   RC rc = RC::SUCCESS;
 
@@ -66,7 +66,7 @@ RC UpdateStmt::create(Db *db, const UpdateSqlNode &update, Stmt *&stmt)
   FilterStmt *filter_stmt = nullptr;
 
   if (!update.conditions.empty()) {
-    BinderContext binder_context;
+    BinderContext binder_context(db);
     binder_context.add_table(table);
     ExpressionBinder binder(binder_context);
 
