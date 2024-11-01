@@ -28,7 +28,7 @@ DeleteStmt::~DeleteStmt()
   }
 }
 
-RC DeleteStmt::create(Db *db, const DeleteSqlNode &delete_sql, Stmt *&stmt)
+RC DeleteStmt::create(const Db *db, const DeleteSqlNode &delete_sql, Stmt *&stmt)
 {
   RC rc = RC::SUCCESS;
   const char *table_name = delete_sql.relation_name.c_str();
@@ -49,7 +49,7 @@ RC DeleteStmt::create(Db *db, const DeleteSqlNode &delete_sql, Stmt *&stmt)
 
   FilterStmt *filter_stmt = nullptr;
   if (!delete_sql.conditions.empty()) {
-    BinderContext binder_context;
+    BinderContext binder_context(db);
     binder_context.add_table(table);
     ExpressionBinder binder(binder_context);
 

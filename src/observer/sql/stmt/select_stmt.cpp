@@ -37,7 +37,7 @@ SelectStmt::~SelectStmt()
   }
 }
 
-RC SelectStmt::create(Db *db, SelectSqlNode &select_sql, Stmt *&stmt)
+RC SelectStmt::create(const Db *db, SelectSqlNode &select_sql, Stmt *&stmt)
 {
   RC rc = RC::SUCCESS;
   if (nullptr == db) {
@@ -45,7 +45,7 @@ RC SelectStmt::create(Db *db, SelectSqlNode &select_sql, Stmt *&stmt)
     return RC::INVALID_ARGUMENT;
   }
 
-  BinderContext binder_context;
+  BinderContext binder_context(db);
 
   // collect tables in `from` statement
   vector<Table *>                tables;
@@ -98,7 +98,7 @@ RC SelectStmt::create(Db *db, SelectSqlNode &select_sql, Stmt *&stmt)
   FilterStmt *filter_stmt = nullptr;
   if (!select_sql.conditions.empty()) {
     // init binder context
-    BinderContext binder_ctx;
+    BinderContext binder_ctx(db);
     for (auto *table : tables) {
       binder_ctx.add_table(table);
     }

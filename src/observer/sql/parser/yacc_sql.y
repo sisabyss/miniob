@@ -125,6 +125,8 @@ UnboundAggregateExpr *create_aggregate_expression(const char *aggregate_name,
         IS_SYM
         NOT
         LIKE
+        IN
+        EXISTS
         NULL_SYM
         NULLABLE_SYM
         ORDER
@@ -170,6 +172,8 @@ UnboundAggregateExpr *create_aggregate_expression(const char *aggregate_name,
 %type <number>              number
 %type <string>              relation
 %type <comp>                comp_op
+%type <comp>                is_null_comp;
+%type <comp>                xst_comp;
 %type <rel_attr>            rel_attr
 %type <attr_infos>          attr_def_list
 %type <attr_info>           attr_def
@@ -181,11 +185,12 @@ UnboundAggregateExpr *create_aggregate_expression(const char *aggregate_name,
 %type <table_ref_list>      comma_ref_list
 %type <table_ref_list>      join_ref_list
 %type <expression>          expression
+%type <expression>          aggr_expr
+%type <expression>          subquery_expr
 %type <expression_list>     expression_list
 %type <expression_list>     group_by
 %type <bools>               opt_unique
 %type <bools>               opt_null;
-%type <bools>               is_null_comp;
 %type <id_list>             ID_list;
 %type <sql_node>            calc_stmt
 %type <sql_node>            select_stmt
@@ -555,6 +560,13 @@ update_stmt:      /*  update 语句的语法解析树*/
       delete $6;
     }
     ;
+subquery_expr:
+    LBRACE select_stmt RBRACE
+    {
+      $$ = new SubQueryExpr(std::move($2->selection));
+      delete $2;
+    }
+    ;
 select_stmt:        /*  select 语句的语法解析树*/
     SELECT expression_list FROM table_ref_list where group_by opt_order_by
     {
@@ -716,7 +728,15 @@ expression:
       $$ = new StarExpr();
     }
     // your code here
-    | MAX LBRACE expression RBRACE{
+    | aggr_expr {
+      $$ = $1;
+    }
+    | subquery_expr {
+      $$ = $1;
+    }
+    ;
+aggr_expr:
+    MAX LBRACE expression RBRACE{
       if($3 -> type() != ExprType::UNBOUND_FIELD){
         delete $3;
         yyerror (&yylloc, sql_string, sql_result, scanner, YY_("syntax error: can only support MAX(FIELD)"));
@@ -755,8 +775,6 @@ expression:
     | COUNT LBRACE expression RBRACE{
       $$ = create_aggregate_expression("COUNT", $3, sql_string, &@$);
     }
-    ;
-
 rel_attr:
     ID {
       $$ = new RelAttrSqlNode;
@@ -873,19 +891,25 @@ condition:
     {
       $$ = new ConditionSqlNode;
       $$->left_expr = $1;
-      $$->comp = $2 ? IS_NULL_OP : NOT_NULL_OP;
+      $$->comp = $2;
       $$->right_expr = new ValueExpr(Value::Null());
+    }
+    | xst_comp expression
+    {
+      $$ = new ConditionSqlNode;
+      $$->left_expr = new ValueExpr(Value::Null());
+      $$->comp = $1;
+      $$->right_expr = $2;
     }
     ;
 is_null_comp:
-    IS_SYM NULL_SYM {
-      $$ = true;
-    }
-    | IS_SYM NOT NULL_SYM {
-      $$ = false;
-    }
+    IS_SYM NULL_SYM { $$ = IS_NULL_OP; }
+    | IS_SYM NOT NULL_SYM { $$ = NOT_NULL_OP; }
     ;
-
+xst_comp:
+    EXISTS { $$ = XST_OP; }
+    | NOT EXISTS { $$ = NO_XST_OP; }
+    ;
 comp_op:
       EQ { $$ = EQUAL_TO; }
     | LT { $$ = LESS_THAN; }
@@ -895,6 +919,8 @@ comp_op:
     | NE { $$ = NOT_EQUAL; }
     | LIKE { $$ = LIKE_OP; }
     | NOT LIKE { $$ = NO_LIKE_OP; }
+    | IN { $$ = IN_OP; }
+    | NOT IN { $$ = NO_IN_OP; }
     ;
 
 // your code here

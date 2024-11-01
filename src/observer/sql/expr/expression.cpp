@@ -13,12 +13,21 @@ See the Mulan PSL v2 for more details. */
 //
 
 #include "sql/expr/expression.h"
+#include <memory>
 #include "common/like.h"
 #include "common/log/log.h"
+#include "common/rc.h"
+#include "common/lang/defer.h"
 #include "common/type/attr_type.h"
+#include "sql/optimizer/logical_plan_generator.h"
+#include "sql/parser/parse_defs.h"
 #include "sql/expr/tuple.h"
 #include "sql/expr/arithmetic_operator.hpp"
-#include "sql/parser/parse_defs.h"
+#include "sql/operator/logical_operator.h"
+#include "sql/operator/physical_operator.h"
+#include "sql/optimizer/logical_plan_generator.h"
+#include "sql/optimizer/physical_plan_generator.h"
+#include "sql/stmt/select_stmt.h"
 
 using namespace std;
 
@@ -147,7 +156,9 @@ RC ComparisonExpr::compare_value(const Value &left, const Value &right, bool &re
     }
 
     return rc;
-  } else if (comp_ == IS_NULL_OP || comp_ == NOT_NULL_OP) {
+  }
+
+  if (comp_ == IS_NULL_OP || comp_ == NOT_NULL_OP) {
     if (right.attr_type() != AttrType::NULLS)
       LOG_ERROR("IS(NOT) expression only support right value is `NULL`, but get %s", right.to_string().data());
 
@@ -221,12 +232,73 @@ RC ComparisonExpr::get_value(const Tuple &tuple, Value &value) const
   Value left_value;
   Value right_value;
 
+  // FIXME: nullptr
+  left_->open(nullptr);
   RC rc = left_->get_value(tuple, left_value);
+  if (left_->is_multi_valued(tuple)) {
+    LOG_INFO("left-hand expression only support single value");
+    return RC::INVALID_ARGUMENT;
+  }
+  left_->close();
   if (rc != RC::SUCCESS) {
     LOG_WARN("failed to get value of left expression. rc=%s", strrc(rc));
     return rc;
   }
+
+  // Handle IN_OP and NO_IN_OP
+  if (comp_ == IN_OP || comp_ == NO_IN_OP) {
+    if (right_->type() != ExprType::SUBQUERY) {
+      LOG_WARN("IN compop only support right-hand subquery");
+      return RC::INVALID_ARGUMENT;
+    }
+
+    // NULL (NOT)IN SUBQUERY
+    if (left_value.attr_type() == AttrType::NULLS) {
+      value.set_boolean(false);
+      return RC::SUCCESS;
+    }
+
+    // loop for right-hand sub-query
+    bool has_same = false, has_null = false;
+    // FIXME: only open null pointer
+    right_->open(nullptr);
+    while (OB_SUCC(rc = right_->get_value(tuple, right_value))) {
+      if (right_value.attr_type() == AttrType::NULLS) {
+        has_null = false;
+      } else if (left_value.compare(right_value) == 0) {
+        has_same = true;
+      }
+    }
+    right_->close();
+    value.set_boolean(comp_ == IN_OP ? has_same : (has_null ? false : !has_same));
+    return rc == RC::RECORD_EOF ? RC::SUCCESS : rc;
+  }
+
+  // handle XST_OP and NO_XST_OP
+  if (comp_ == XST_OP || comp_ == NO_XST_OP) {
+    if (right_->type() != ExprType::SUBQUERY) {
+      LOG_WARN("EXISTS compop only support right-hand subquery");
+      return RC::INVALID_ARGUMENT;
+    }
+
+    // FIXME: same with former FIXME
+    right_->open(nullptr);
+    rc = right_->get_value(tuple, right_value);
+    right_->close();
+
+    value.set_boolean(comp_ == XST_OP ? rc == RC::SUCCESS : rc == RC::RECORD_EOF);
+    return RC::RECORD_EOF == rc ? RC::SUCCESS : rc;
+  }
+
+  // FIXME: nullptr
+  right_->open(nullptr);
   rc = right_->get_value(tuple, right_value);
+  // FIXME: remove this branch
+  if (right_->is_multi_valued(tuple)) {
+    LOG_INFO("right-hand expression only support single value except IN/EXISTS comp");
+    return RC::INVALID_ARGUMENT;
+  }
+  right_->close();
   if (rc != RC::SUCCESS) {
     LOG_WARN("failed to get value of right expression. rc=%s", strrc(rc));
     return rc;
@@ -649,4 +721,136 @@ RC AggregateExpr::type_from_string(const char *type_str, AggregateExpr::Type &ty
     rc = RC::INVALID_ARGUMENT;
   }
   return rc;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+SubQueryExpr::SubQueryExpr(SelectSqlNode &&sql_node)
+  : sql_node_(std::make_unique<SelectSqlNode>(std::move(sql_node)))
+{}
+
+RC SubQueryExpr::open(Trx* trx)
+{
+  return physical_oper_ ? physical_oper_->open(trx) : RC::INTERNAL;
+}
+
+RC SubQueryExpr::close()
+{
+  return physical_oper_ ? physical_oper_->close() : RC::SUCCESS;
+}
+
+bool SubQueryExpr::is_multi_valued(const Tuple& tuple) const
+{
+  return physical_oper_ && physical_oper_->next() != RC::RECORD_EOF;
+}
+
+RC SubQueryExpr::get_value(const Tuple& tuple, Value& value) const
+{
+  if (!physical_oper_) {
+    return RC::INTERNAL;
+  }
+  if (RC rc = physical_oper_->next(); rc != RC::SUCCESS) {
+    return rc;
+  }
+  return physical_oper_->current_tuple()->cell_at(0, value);
+}
+
+ExprType SubQueryExpr::type() const
+{
+  return ExprType::SUBQUERY;
+}
+
+AttrType SubQueryExpr::value_type() const
+{
+  return value_type_;
+}
+
+RC SubQueryExpr::build(const Db* db)
+{
+  try {
+    if (RC rc = build_stmt(db); rc != RC::SUCCESS) {
+      LOG_WARN("Failed to build subquery stmt: %s", strrc(rc));
+      return rc;
+    }
+    if (RC rc = build_logical_oper(); rc != RC::SUCCESS) {
+      LOG_WARN("Failed to build subquery logical operator: %s", strrc(rc));
+      return rc;
+    }
+    if (RC rc = build_physical_oper(); rc != RC::SUCCESS) {
+      LOG_WARN("Failed to build subquery physical operator: %s", strrc(rc));
+      return rc;
+    }
+    return RC::SUCCESS;
+  } catch (const std::exception& e) {
+    LOG_WARN("Exception during subquery build: %s", e.what());
+    return RC::INTERNAL;
+  }
+}
+
+RC SubQueryExpr::build_stmt(const Db *db)
+{
+  Stmt * stmt = nullptr;
+  if (RC rc = SelectStmt::create(db, *sql_node_.get(), stmt); OB_FAIL(rc)) {
+    LOG_WARN("Failed to generate subquery select stmt: %s", strrc(rc));
+    return rc;
+  }
+
+  if (stmt->type() != StmtType::SELECT) {
+    LOG_WARN("Subquery stmt must be SELECT");
+    if (stmt != nullptr) {
+      delete stmt;
+    }
+    return RC::INVALID_ARGUMENT;
+  }
+
+  SelectStmt* select_stmt = static_cast<SelectStmt*>(stmt);
+  if (select_stmt->query_expressions().size() > 1) {
+    LOG_WARN("Subquery expression must have one column.");
+    if (stmt != nullptr) {
+      delete stmt;
+    }
+    return RC::INVALID_ARGUMENT;
+  }
+
+  // set value type
+  value_type_ = select_stmt->query_expressions().front()->value_type();
+
+  stmt_ = std::unique_ptr<SelectStmt>(select_stmt);
+  return RC::SUCCESS;
+}
+
+RC SubQueryExpr::build_logical_oper()
+{
+  LogicalPlanGenerator plan_generator;
+  if (RC rc = plan_generator.create(stmt_.get(), logical_oper_); OB_FAIL(rc)) {
+    LOG_WARN("Failed to generate logical operator: %s", strrc(rc));
+    return rc;
+  }
+  return RC::SUCCESS;
+}
+
+RC SubQueryExpr::build_physical_oper()
+{
+  PhysicalPlanGenerator plan_generator;
+  if (RC rc = plan_generator.create(*logical_oper_, physical_oper_); OB_FAIL(rc)) {
+    LOG_WARN("Failed to generate physical operator: %s", strrc(rc));
+    return rc;
+  }
+
+  // FIXME: post-build check
+  // 1. for star expression, check the tuple size > 1;
+  // 2. ...
+  /*
+  physical_oper_->open(nullptr);
+  if (!OB_SUCC(physical_oper_->next())) {
+    LOG_INFO("post build physical oper check failed.");
+    Tuple *tuple = physical_oper_->current_tuple();
+    if (tuple->cell_num() > 1) {
+      LOG_WARN("subquery expression should only have one column. but get [%s]", tuple->to_string().data());
+      return RC::INVALID_ARGUMENT;
+    }
+  }
+  physical_oper_->close();
+  */
+
+  return RC::SUCCESS;
 }

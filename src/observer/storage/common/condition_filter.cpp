@@ -20,6 +20,7 @@ See the Mulan PSL v2 for more details. */
 #include "sql/expr/expression.h"
 #include "sql/expr/tuple.h"
 #include "sql/parser/expression_binder.h"
+#include "sql/parser/parse_defs.h"
 #include "storage/record/record_manager.h"
 #include "storage/table/table.h"
 #include <math.h>
@@ -83,7 +84,10 @@ RC DefaultConditionFilter::init(const ConditionSqlNode &condition)
   // 校验和转换
   if (left_bound_expr->value_type() != right_bound_expr->value_type()
       /* Okay for null comparasion */
-      && (left_bound_expr->value_type() != AttrType::NULLS && right_bound_expr->value_type() != AttrType::NULLS)) {
+      && (left_bound_expr->value_type() != AttrType::NULLS && right_bound_expr->value_type() != AttrType::NULLS)
+      /* Okay for subquery comparasion */
+      && (condition.comp != IN_OP  && condition.comp != NO_IN_OP && condition.comp != XST_OP && condition.comp != NO_XST_OP)
+    ) {
     auto left_to_right_cost = implicit_cast_cost(left_bound_expr->value_type(), right_bound_expr->value_type());
     auto right_to_left_cost = implicit_cast_cost(right_bound_expr->value_type(), left_bound_expr->value_type());
     if (left_to_right_cost <= right_to_left_cost && left_to_right_cost != INT32_MAX) {

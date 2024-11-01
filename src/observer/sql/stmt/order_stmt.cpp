@@ -6,7 +6,7 @@
 #include "common/rc.h"
 #include "sql/parser/parse_defs.h"
 
-RC OrderStmt::create(Db *db, Table *default_table, std::unordered_map<std::string, Table *> *tables,
+RC OrderStmt::create(const Db *db, Table *default_table, std::unordered_map<std::string, Table *> *tables,
                      const OrderSqlNode *orders, int ordernum, OrderStmt *&stmt, ExpressionBinder& expression_binder){
 
   RC rc = RC::SUCCESS;
@@ -35,7 +35,7 @@ RC OrderStmt::create(Db *db, Table *default_table, std::unordered_map<std::strin
   return rc;
 }
 
-RC OrderStmt::create_order_unit(Db *db, Table *default_table, std::unordered_map<std::string, Table *> *tables,
+RC OrderStmt::create_order_unit(const Db *db, Table *default_table, std::unordered_map<std::string, Table *> *tables,
                      const OrderSqlNode& orderSqlNode, OrderUnit*& order_unit, ExpressionBinder& expression_binder){
 
     std::unique_ptr<Expression> tmp = std::unique_ptr<Expression>(orderSqlNode.unbound_field_expr_);
