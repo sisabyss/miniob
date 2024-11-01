@@ -728,6 +728,8 @@ SubQueryExpr::SubQueryExpr(SelectSqlNode &&sql_node)
   : sql_node_(std::make_unique<SelectSqlNode>(std::move(sql_node)))
 {}
 
+SubQueryExpr::~SubQueryExpr() = default;
+
 RC SubQueryExpr::open(Trx* trx)
 {
   return physical_oper_ ? physical_oper_->open(trx) : RC::INTERNAL;
