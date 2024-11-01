@@ -492,7 +492,7 @@ class SubQueryExpr : public Expression
 {
 public:
   SubQueryExpr(SelectSqlNode &&sql_node);
-  virtual ~SubQueryExpr() override = default;
+  virtual ~SubQueryExpr();
 
   RC open(Trx* trx) override;
   RC close() override;
