@@ -81,6 +81,13 @@ RC DefaultConditionFilter::init(const ConditionSqlNode &condition)
     right_bound_expr = std::move(bound_expressions.front());
   }
 
+  if (right_bound_expr->has_multi_valued()
+      && (condition.comp != IN_OP && condition.comp != NO_IN_OP
+          && condition.comp != XST_OP && condition.comp!= NO_XST_OP)) {
+    LOG_INFO("only IN, EXISTS comp support multiple valued expression.");
+    return RC::INVALID_ARGUMENT;
+  }
+
   // 校验和转换
   if (left_bound_expr->value_type() != right_bound_expr->value_type()
       /* Okay for null comparasion */

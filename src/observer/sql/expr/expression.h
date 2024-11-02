@@ -98,6 +98,7 @@ public:
    * @brief 由于子查询表达式可能为多值，这里添加一个api
    */
   virtual bool is_multi_valued(const Tuple &tuple) const { return false; };
+  virtual bool has_multi_valued() const { return false; }
 
   /**
    * @brief 从 `chunk` 中获取表达式的计算结果 `column`
@@ -497,6 +498,7 @@ public:
   RC open(Trx* trx) override;
   RC close() override;
   bool is_multi_valued(const Tuple &tuple) const override;
+  bool has_multi_valued() const override;
   RC get_value(const Tuple &tuple, Value &value) const override;
 
   ExprType type() const override;
