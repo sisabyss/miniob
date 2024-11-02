@@ -745,6 +745,21 @@ bool SubQueryExpr::is_multi_valued(const Tuple& tuple) const
   return physical_oper_ && physical_oper_->next() != RC::RECORD_EOF;
 }
 
+bool SubQueryExpr::has_multi_valued() const
+{
+  if (!physical_oper_) {
+    return false;
+  }
+  physical_oper_->open(nullptr);
+  if (physical_oper_->next() == RC::RECORD_EOF) {
+    return false;
+  }
+
+  bool res = physical_oper_->next() != RC::RECORD_EOF;
+  physical_oper_->close();
+  return res;
+}
+
 RC SubQueryExpr::get_value(const Tuple& tuple, Value& value) const
 {
   if (!physical_oper_) {
