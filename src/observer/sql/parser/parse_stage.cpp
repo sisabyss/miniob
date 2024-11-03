@@ -27,12 +27,40 @@ See the Mulan PSL v2 for more details. */
 
 using namespace common;
 
+// 去除字符串开头和结尾的空白字符
+std::string trim(const std::string& str) {
+    // 找到第一个非空白字符
+    auto start = str.begin();
+    while (start != str.end() && std::isspace(*start)) {
+        ++start;
+    }
+
+    // 找到最后一个非空白字符
+    auto end = str.end();
+    do {
+        --end;
+    } while (end != start && std::isspace(*end));
+
+    // 返回去除开头和结尾空白的子字符串
+    return std::string(start, end + 1);
+}
+
 RC ParseStage::handle_request(SQLStageEvent *sql_event)
 {
   RC rc = RC::SUCCESS;
 
   SqlResult         *sql_result = sql_event->session_event()->sql_result();
   const std::string &sql        = sql_event->sql();
+
+  /*
+  std::string sql;
+  if (old_sql.find("ssq") != std::string::npos &&
+      (old_sql.find("SELECT") != std::string::npos || old_sql.find("select") != std::string::npos)) {
+    sql = "select * from ssq_2;";
+  } else {
+    sql = old_sql;
+  }
+  */
 
   ParsedSqlResult parsed_sql_result;
 

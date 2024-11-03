@@ -749,6 +749,11 @@ RC SubQueryExpr::get_value(const Tuple& tuple, Value& value) const
   if (!physical_oper_) {
     return RC::INTERNAL;
   }
+  if (size_ == 0) {
+    value = Value::Null();
+    return RC::RECORD_EOF;
+  }
+
   if (RC rc = physical_oper_->next(); rc != RC::SUCCESS) {
     return rc;
   }
@@ -845,6 +850,11 @@ RC SubQueryExpr::build_physical_oper()
     size_ += 1;
   }
   physical_oper_->close();
+
+  if (size_ == 0) {
+    LOG_INFO("right-hand expresion must not be empty column");
+    return RC::EMPTY;
+  }
 
   return RC::SUCCESS;
 }
