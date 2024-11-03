@@ -22,7 +22,7 @@ RC MaxAggregator::accumulate(const Value &value)
     return RC::SUCCESS;
   }
 
-  if (value_.attr_type() == AttrType::UNDEFINED) {
+  if (value_.attr_type() == AttrType::NULLS) {
     value_ = value;
     return RC::SUCCESS;
   }
@@ -52,7 +52,7 @@ RC MinAggregator::accumulate(const Value &value)
     return RC::SUCCESS;
   }
 
-  if (value_.attr_type() == AttrType::UNDEFINED) {
+  if (value_.attr_type() == AttrType::NULLS) {
     value_ = value;
     return RC::SUCCESS;
   }
@@ -82,7 +82,7 @@ RC SumAggregator::accumulate(const Value &value)
     return RC::SUCCESS;
   }
 
-  if (value_.attr_type() == AttrType::UNDEFINED) {
+  if (value_.attr_type() == AttrType::NULLS) {
     value_ = value;
     return RC::SUCCESS;
   }
@@ -116,7 +116,7 @@ RC AvgAggregator::accumulate(const Value &value)
          "AVG operating should be float or int, false type %s",
          attr_type_to_string(value.attr_type()));
 
-  if (value_.attr_type() == AttrType::UNDEFINED) {
+  if (value_.attr_type() == AttrType::NULLS) {
     value_ = Value(value.get_float());
     this->num_++;
     return RC::SUCCESS;

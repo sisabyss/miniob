@@ -20,6 +20,7 @@ See the Mulan PSL v2 for more details. */
 class Aggregator
 {
 public:
+  Aggregator() : value_(Value::Null()) {};
   virtual ~Aggregator() = default;
 
   virtual RC accumulate(const Value &value) = 0;

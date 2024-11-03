@@ -39,6 +39,19 @@ RC ScalarGroupByPhysicalOperator::open(Trx *trx)
 
   ValueListTuple group_by_evaluated_tuple;
 
+  LOG_INFO("ScalarGroupByOper::open(): begin()");
+
+  /** FIXME:
+   * to handle empty child, create group_value frist.
+   */
+  {
+    AggregatorList aggregator_list;
+    create_aggregator_list(aggregator_list);
+
+    CompositeTuple composite_tuple;
+    group_value_ = make_unique<GroupValueType>(std::move(aggregator_list), std::move(composite_tuple));
+  }
+
   while (OB_SUCC(rc = child.next())) {
     Tuple *child_tuple = child.current_tuple();
     if (nullptr == child_tuple) {
@@ -50,10 +63,7 @@ RC ScalarGroupByPhysicalOperator::open(Trx *trx)
     group_value_expression_tuple.set_tuple(child_tuple);
 
     // 计算聚合值
-    if (group_value_ == nullptr) {
-      AggregatorList aggregator_list;
-      create_aggregator_list(aggregator_list);
-
+    if (auto &composite_tuple = get<1>(*group_value_); composite_tuple.cell_num() == 0) {
       ValueListTuple child_tuple_to_value;
       rc = ValueListTuple::make(*child_tuple, child_tuple_to_value);
       if (OB_FAIL(rc)) {
@@ -61,9 +71,7 @@ RC ScalarGroupByPhysicalOperator::open(Trx *trx)
         return rc;
       }
 
-      CompositeTuple composite_tuple;
       composite_tuple.add_tuple(make_unique<ValueListTuple>(std::move(child_tuple_to_value)));
-      group_value_ = make_unique<GroupValueType>(std::move(aggregator_list), std::move(composite_tuple));
     }
     
     rc = aggregate(get<0>(*group_value_), group_value_expression_tuple);
@@ -83,6 +91,7 @@ RC ScalarGroupByPhysicalOperator::open(Trx *trx)
   }
 
   // 得到最终聚合后的值
+  LOG_INFO("ScalarGroupByOper::open(): evaluate %p", group_value_.get());
   if (group_value_) {
     rc = evaluate(*group_value_);
   }
