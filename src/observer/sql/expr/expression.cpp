@@ -234,11 +234,11 @@ RC ComparisonExpr::get_value(const Tuple &tuple, Value &value) const
 
   // FIXME: nullptr
   left_->open(nullptr);
-  RC rc = left_->get_value(tuple, left_value);
-  if (left_->is_multi_valued(tuple)) {
+  if (left_->has_multi_valued()) {
     LOG_INFO("left-hand expression only support single value");
     return RC::INVALID_ARGUMENT;
   }
+  RC rc = left_->get_value(tuple, left_value);
   left_->close();
   if (rc != RC::SUCCESS) {
     LOG_WARN("failed to get value of left expression. rc=%s", strrc(rc));
@@ -292,12 +292,11 @@ RC ComparisonExpr::get_value(const Tuple &tuple, Value &value) const
 
   // FIXME: nullptr
   right_->open(nullptr);
-  rc = right_->get_value(tuple, right_value);
-  // FIXME: remove this branch
-  if (right_->is_multi_valued(tuple)) {
+  if (right_->has_multi_valued()) {
     LOG_INFO("right-hand expression only support single value except IN/EXISTS comp");
     return RC::INVALID_ARGUMENT;
   }
+  rc = right_->get_value(tuple, right_value);
   right_->close();
   if (rc != RC::SUCCESS) {
     LOG_WARN("failed to get value of right expression. rc=%s", strrc(rc));
@@ -740,24 +739,9 @@ RC SubQueryExpr::close()
   return physical_oper_ ? physical_oper_->close() : RC::SUCCESS;
 }
 
-bool SubQueryExpr::is_multi_valued(const Tuple& tuple) const
-{
-  return physical_oper_ && physical_oper_->next() != RC::RECORD_EOF;
-}
-
 bool SubQueryExpr::has_multi_valued() const
 {
-  if (!physical_oper_) {
-    return false;
-  }
-  physical_oper_->open(nullptr);
-  if (physical_oper_->next() == RC::RECORD_EOF) {
-    return false;
-  }
-
-  bool res = physical_oper_->next() != RC::RECORD_EOF;
-  physical_oper_->close();
-  return res;
+  return size_ > 1;
 }
 
 RC SubQueryExpr::get_value(const Tuple& tuple, Value& value) const
@@ -856,18 +840,11 @@ RC SubQueryExpr::build_physical_oper()
   // FIXME: post-build check
   // 1. for star expression, check the tuple size > 1;
   // 2. ...
-  /*
   physical_oper_->open(nullptr);
-  if (!OB_SUCC(physical_oper_->next())) {
-    LOG_INFO("post build physical oper check failed.");
-    Tuple *tuple = physical_oper_->current_tuple();
-    if (tuple->cell_num() > 1) {
-      LOG_WARN("subquery expression should only have one column. but get [%s]", tuple->to_string().data());
-      return RC::INVALID_ARGUMENT;
-    }
+  while (physical_oper_->next() == RC::SUCCESS) {
+    size_ += 1;
   }
   physical_oper_->close();
-  */
 
   return RC::SUCCESS;
 }

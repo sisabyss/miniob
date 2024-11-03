@@ -14,6 +14,7 @@ See the Mulan PSL v2 for more details. */
 
 #pragma once
 
+#include <cstdint>
 #include <memory>
 #include <string>
 
@@ -497,7 +498,7 @@ public:
 
   RC open(Trx* trx) override;
   RC close() override;
-  bool is_multi_valued(const Tuple &tuple) const override;
+  uint64_t size() const { return size_; }
   bool has_multi_valued() const override;
   RC get_value(const Tuple &tuple, Value &value) const override;
 
@@ -514,6 +515,7 @@ private:
 
 private:
   AttrType value_type_ = AttrType::UNDEFINED;
+  uint64_t size_ = 0;
 
   std::unique_ptr<SelectSqlNode> sql_node_;
   std::unique_ptr<SelectStmt> stmt_;
