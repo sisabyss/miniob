@@ -247,7 +247,7 @@ RC ComparisonExpr::get_value(const Tuple &tuple, Value &value) const
 
   // Handle IN_OP and NO_IN_OP
   if (comp_ == IN_OP || comp_ == NO_IN_OP) {
-    if (right_->type() != ExprType::SUBQUERY) {
+    if (right_->type() != ExprType::SUBQUERY && right_->type() != ExprType::EXPRLIST) {
       LOG_WARN("IN compop only support right-hand subquery");
       return RC::INVALID_ARGUMENT;
     }
@@ -846,5 +846,15 @@ RC SubQueryExpr::build_physical_oper()
   }
   physical_oper_->close();
 
+  return RC::SUCCESS;
+}
+
+RC ExprListExpr::open(Trx *trx) {
+  reset();
+  return RC::SUCCESS;
+}
+
+RC ExprListExpr::close() {
+  reset();
   return RC::SUCCESS;
 }

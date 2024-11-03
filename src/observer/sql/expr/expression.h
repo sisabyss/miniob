@@ -52,6 +52,7 @@ enum class ExprType
   AGGREGATION,  ///< 聚合运算
 
   SUBQUERY,     ///< 子查询运算
+  EXPRLIST,     ///< 表达式列表
 };
 
 /**
@@ -521,4 +522,47 @@ private:
   std::unique_ptr<SelectStmt> stmt_;
   std::unique_ptr<LogicalOperator> logical_oper_;
   std::unique_ptr<PhysicalOperator> physical_oper_;
+};
+
+class ExprListExpr : public Expression
+{
+public:
+  // 使用 std::move 初始化成员
+  ExprListExpr(std::vector<std::unique_ptr<Expression>> exprs)
+    : exprs_(std::move(exprs)) {
+    /* 这里有未定义行为，故在函数体内初始化it_ */
+    it_ = exprs_.begin();
+  }
+
+  ExprListExpr(std::vector<Expression*>&& exprs)
+    : exprs_(std::make_move_iterator(exprs.begin()), std::make_move_iterator(exprs.end())) {
+      it_ = exprs_.begin();
+  }
+
+  virtual ~ExprListExpr() = default;
+
+  RC open(Trx *trx) override;
+  RC close() override;
+
+  RC get_value(const Tuple &tuple, Value &value) const override
+  {
+    if (it_ == exprs_.end()) {
+      return RC::RECORD_EOF;
+    }
+    // 使用 const_cast 将常量迭代器转换为非常量迭代器
+    return (*it_++)->get_value(tuple, value);
+  }
+
+  ExprType type() const override { return ExprType::EXPRLIST; }
+
+  AttrType value_type() const override { return AttrType::UNDEFINED; }
+
+  std::vector<std::unique_ptr<Expression>> &get_exprs() { return exprs_;};
+  void set_exprs(std::vector<std::unique_ptr<Expression>> &&exprs) { exprs_ = std::move(exprs); };
+
+private:
+  void reset() { it_ = exprs_.begin(); }
+
+  std::vector<std::unique_ptr<Expression>> exprs_;
+  mutable std::vector<std::unique_ptr<Expression>>::iterator it_;
 };

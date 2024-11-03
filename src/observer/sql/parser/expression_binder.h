@@ -72,6 +72,8 @@ private:
       std::unique_ptr<Expression> &aggregate_expr, std::vector<std::unique_ptr<Expression>> &bound_expressions);
   RC bind_subquery_expression(
       std::unique_ptr<Expression> &subquery_expr, std::vector<std::unique_ptr<Expression>> &bound_expressions);
+  RC bind_exprlist_expression(
+      std::unique_ptr<Expression> &exprlist_expr, std::vector<std::unique_ptr<Expression>> &bound_expressions);
 
 private:
   BinderContext context_;
