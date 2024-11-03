@@ -711,7 +711,7 @@ expression:
     }
     | LBRACE expression_list RBRACE {
       if ($2->size() == 1) {
-        $$ = $2->front();
+        $$ = $2->front().release();
       } else {
         $$ = new ExprListExpr(std::move(*$2));
       }

@@ -18,6 +18,7 @@ See the Mulan PSL v2 for more details. */
 #include "common/log/log.h"
 #include "common/lang/string.h"
 #include "sql/parser/expression_binder.h"
+#include "common/rc.h"
 #include "sql/expr/expression.h"
 #include "sql/expr/expression_iterator.h"
 
@@ -97,6 +98,11 @@ RC ExpressionBinder::bind_expression(unique_ptr<Expression> &expr, vector<unique
     case ExprType::SUBQUERY: {
       LOG_WARN("bind subquery expression");
       return bind_subquery_expression(expr, bound_expressions);
+    } break;
+
+    case ExprType::EXPRLIST: {
+      LOG_WARN("bind exprlist expression");
+      return bind_exprlist_expression(expr, bound_expressions);
     } break;
 
     default: {
@@ -475,5 +481,34 @@ RC ExpressionBinder::bind_subquery_expression(
   LOG_INFO("subquery_expr bind success.");
 
   bound_expressions.emplace_back(std::move(subquery_expr));
+  return RC::SUCCESS;
+}
+
+RC ExpressionBinder::bind_exprlist_expression(
+    unique_ptr<Expression> &expr, vector<unique_ptr<Expression>> &bound_expressions)
+{
+  if (nullptr == expr) {
+    return RC::SUCCESS;
+  }
+
+  std::unique_ptr<ExprListExpr> exprlist_expr(static_cast<ExprListExpr*>(expr.release()));
+  expr.reset();
+  /*
+  auto &unbound_children_list = exprlist_expr->get_exprs();
+  vector<unique_ptr<Expression>> bound_exprlist;
+
+  for (auto &child_expr : unbound_children_list) {
+    vector<unique_ptr<Expression>> child_bound_expressions;
+    RC rc = bind_expression(child_expr, child_bound_expressions);
+    if (OB_FAIL(rc)) {
+      LOG_WARN("failed to bind child expression, rc:%s", strrc(rc));
+    }
+    bound_exprlist.emplace_back(child_bound_expressions[0].release());
+  }
+
+  exprlist_expr->set_exprs(std::move(bound_exprlist));
+  */
+
+  bound_expressions.emplace_back(std::move(exprlist_expr));
   return RC::SUCCESS;
 }
