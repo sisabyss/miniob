@@ -320,7 +320,10 @@ RC RecordLogReplayer::replay_update(DiskBufferPool &buffer_pool, const RecordLog
   }
 
   RID rid(header.page_num, header.slot_num);
-  rc = record_page_handler->update_record(rid, header.data);
+  Record record;
+  record.set_rid(rid);
+  record.set_data((char*)header.data);
+  rc = record_page_handler->update_record(record);
   if (OB_FAIL(rc)) {
     LOG_WARN("fail to recover update record. page num=%d, slot num=%d, rc=%s", 
              header.page_num, header.slot_num, strrc(rc));

@@ -40,6 +40,7 @@ enum class PhysicalOperatorType
   TABLE_SCAN,
   TABLE_SCAN_VEC,
   INDEX_SCAN,
+  CREATE_TABLE,
   NESTED_LOOP_JOIN,
   EXPLAIN,
   PREDICATE,

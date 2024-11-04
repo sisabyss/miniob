@@ -10,6 +10,7 @@ See the Mulan PSL v2 for more details. */
 
 #include "update_logical_operator.h"
 
-UpdateLogicalOperator::UpdateLogicalOperator(Table *table, Value value, Field field)
-    : table_(table), value_(value), field_(field)
-{}
+UpdateLogicalOperator::UpdateLogicalOperator(Table *table, std::vector<std::unique_ptr<Expression>> &&expr_list, std::vector<FieldMeta> &&field_list)
+    : table_(table), expr_list_(std::move(expr_list)), field_list_(std::move(field_list))
+{
+}

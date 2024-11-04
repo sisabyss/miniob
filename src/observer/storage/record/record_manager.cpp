@@ -14,6 +14,7 @@ See the Mulan PSL v2 for more details. */
 #include "storage/record/record_manager.h"
 #include "common/log/log.h"
 #include "common/rc.h"
+#include "storage/record/record.h"
 #include "storage/trx/trx.h"
 #include "storage/clog/log_handler.h"
 #include <cstring>
@@ -351,34 +352,34 @@ RC RowRecordPageHandler::delete_record(const RID *rid)
   }
 }
 
-RC RowRecordPageHandler::update_record(const RID &rid, const char *data)
+RC RowRecordPageHandler::update_record(const Record &record)
 {
   // 确保页面非只读模式
   ASSERT(rw_mode_ != ReadWriteMode::READ_ONLY, "Cannot update record on a read-only page");
 
   // 检查记录 ID 是否有效，防止 slot_num 超出页面记录容量
-  if (rid.slot_num >= page_header_->record_capacity) {
+  if (record.rid().slot_num >= page_header_->record_capacity) {
     LOG_ERROR("Invalid slot_num %d; exceeds page's record capacity. frame=%s, page_header=%s",
-              rid.slot_num, frame_->to_string().c_str(), page_header_->to_string().c_str());
+              record.rid().slot_num, frame_->to_string().c_str(), page_header_->to_string().c_str());
     return RC::INVALID_ARGUMENT;
   }
 
   Bitmap bitmap(bitmap_, page_header_->record_capacity);
 
   // 检查指定位置的 slot 是否已被使用
-  if (bitmap.get_bit(rid.slot_num)) {
+  if (bitmap.get_bit(record.rid().slot_num)) {
     frame_->mark_dirty();  // 标记页面为已修改
 
     // 获取当前 slot 的记录数据指针
-    char* record_data = get_record_data(rid.slot_num);
+    char* record_data = get_record_data(record.rid().slot_num);
 
     // 若数据内容不同则进行复制更新
-    if (record_data != data) {
-      std::memcpy(record_data, data, page_header_->record_real_size);
+    if (record_data != record.data()) {
+      std::memcpy(record_data, record.data(), page_header_->record_real_size);
     }
 
     // 记录更新日志，忽略日志操作失败
-    RC rc = log_handler_.update_record(frame_, rid, data);
+    RC rc = log_handler_.update_record(frame_, record.rid(), record.data());
     if (OB_FAIL(rc)) {
       LOG_ERROR("Failed to update record. page_num %d:%d. rc=%s",
                 disk_buffer_pool_->file_desc(), frame_->page_num(), strrc(rc));
@@ -387,7 +388,7 @@ RC RowRecordPageHandler::update_record(const RID &rid, const char *data)
     return RC::SUCCESS;
   } else {
     // 若 slot 未使用则记录信息
-    LOG_DEBUG("Invalid slot_num %d; slot is empty. page_num %d.", rid.slot_num, frame_->page_num());
+    LOG_DEBUG("Invalid slot_num %d; slot is empty. page_num %d.", record.rid().slot_num, frame_->page_num());
     return RC::RECORD_NOT_EXIST;
   }
 }
@@ -612,17 +613,17 @@ RC RecordFileHandler::insert_record(const char *data, int record_size, RID *rid)
   return record_page_handler->insert_record(data, rid);
 }
 
-RC RecordFileHandler::update_record(const char *data, RID *rid) {
+RC RecordFileHandler::update_record(const Record &record) {
   RC ret = RC::SUCCESS;
 
   unique_ptr<RecordPageHandler> record_page_handler(RecordPageHandler::create(storage_format_));
 
-  ret = record_page_handler->init(*disk_buffer_pool_, *log_handler_, rid->page_num, ReadWriteMode::READ_WRITE);
+  ret = record_page_handler->init(*disk_buffer_pool_, *log_handler_, record.rid().page_num, ReadWriteMode::READ_WRITE);
   if (OB_FAIL(ret)) {
-    LOG_WARN("failed to init record page handler. page num=%d, rc=%d:%s", rid->page_num, ret, strrc(ret));
+    LOG_WARN("failed to init record page handler. page num=%d, rc=%d:%s", record.rid().page_num, ret, strrc(ret));
     return ret;
   }
-  return record_page_handler->update_record(*rid, data);
+  return record_page_handler->update_record(record);
 }
 
 RC RecordFileHandler::recover_insert_record(const char *data, int record_size, const RID &rid)
@@ -715,7 +716,7 @@ RC RecordFileHandler::visit_record(const RID &rid, function<bool(Record &)> upda
 
   bool updated = updater(record);
   if (updated) {
-    rc = page_handler->update_record(rid, record.data());
+    rc = page_handler->update_record(record);
   }
   return rc;
 }
@@ -861,7 +862,7 @@ RC RecordFileScanner::update_current(const Record &record)
     return RC::INVALID_ARGUMENT;
   }
 
-  return record_page_handler_->update_record(record.rid(), record.data());
+  return record_page_handler_->update_record(record);
 }
 
 ChunkFileScanner::~ChunkFileScanner() { close_scan(); }

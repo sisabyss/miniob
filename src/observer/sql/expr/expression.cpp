@@ -19,6 +19,7 @@ See the Mulan PSL v2 for more details. */
 #include "common/rc.h"
 #include "common/lang/defer.h"
 #include "common/type/attr_type.h"
+#include "common/value.h"
 #include "sql/optimizer/logical_plan_generator.h"
 #include "sql/parser/parse_defs.h"
 #include "sql/expr/tuple.h"
@@ -729,35 +730,22 @@ SubQueryExpr::SubQueryExpr(SelectSqlNode &&sql_node)
 
 SubQueryExpr::~SubQueryExpr() = default;
 
-RC SubQueryExpr::open(Trx* trx)
-{
-  return physical_oper_ ? physical_oper_->open(trx) : RC::INTERNAL;
-}
+RC SubQueryExpr::open(Trx* trx) { it_ = tuple_list_.begin(); return RC::SUCCESS; }
 
-RC SubQueryExpr::close()
-{
-  return physical_oper_ ? physical_oper_->close() : RC::SUCCESS;
-}
+RC SubQueryExpr::close() { it_ = tuple_list_.end(); return RC::SUCCESS; }
 
-bool SubQueryExpr::has_multi_valued() const
-{
-  return size_ > 1;
-}
+uint64_t SubQueryExpr::size() const { return tuple_list_.size(); }
+
+bool SubQueryExpr::has_multi_valued() const { return size() > 1; }
 
 RC SubQueryExpr::get_value(const Tuple& tuple, Value& value) const
 {
-  if (!physical_oper_) {
-    return RC::INTERNAL;
-  }
-  if (size_ == 0) {
+  if (size() == 0 || it_ == tuple_list_.end()) {
     value = Value::Null();
     return RC::RECORD_EOF;
   }
 
-  if (RC rc = physical_oper_->next(); rc != RC::SUCCESS) {
-    return rc;
-  }
-  return physical_oper_->current_tuple()->cell_at(0, value);
+  return (*it_++).cell_at(0, value);
 }
 
 ExprType SubQueryExpr::type() const
@@ -842,16 +830,16 @@ RC SubQueryExpr::build_physical_oper()
     return rc;
   }
 
-  // FIXME: post-build check
-  // 1. for star expression, check the tuple size > 1;
-  // 2. ...
   physical_oper_->open(nullptr);
   while (physical_oper_->next() == RC::SUCCESS) {
-    size_ += 1;
+    ValueListTuple value_tuple;
+    ValueListTuple::make(*physical_oper_->current_tuple(), value_tuple);
+    LOG_INFO("make subquery tuple %s", value_tuple.to_string().data());
+    tuple_list_.emplace_back(std::move(value_tuple));
   }
   physical_oper_->close();
 
-  if (size_ == 0) {
+  if (size() == 0) {
     LOG_INFO("right-hand expresion must not be empty column");
     return RC::EMPTY;
   }

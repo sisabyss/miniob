@@ -20,6 +20,7 @@ See the Mulan PSL v2 for more details. */
 
 class Table;
 class FilterStmt;
+class Expression;
 
 /**
  * @brief 更新语句
@@ -29,25 +30,33 @@ class UpdateStmt : public Stmt
 {
 public:
   UpdateStmt() = default;
-  UpdateStmt(Table *table, Value value, Field field, FilterStmt *filter_stmt);
+  UpdateStmt(
+    Table *table,
+    std::vector<FieldMeta> &&field_list,
+    std::vector<std::unique_ptr<Expression>>&& expr_list,
+    FilterStmt *filter_stmt
+  );
   virtual ~UpdateStmt();
 
   StmtType type() const override { return StmtType::UPDATE; }
 
 public:
-  static RC create(const Db *db, const UpdateSqlNode &update_sql, Stmt *&stmt);
+  static RC create(const Db *db, UpdateSqlNode &update_sql, Stmt *&stmt);
 
 public:
   Table       *table() const { return table_; }
   FilterStmt  *filter_stmt() const { return filter_stmt_; }
-  const Value &value() const { return  value_; }
-  Value &value() { return  value_; }
-  const Field &field() const { return field_; }
-  Field &field() { return field_; }
+
+  const std::vector<FieldMeta> &field_list() const { return field_list_; }
+  std::vector<FieldMeta> &field_list() { return field_list_; }
+  const std::vector<std::unique_ptr<Expression>> &expr_list() const { return expr_list_; }
+  std::vector<std::unique_ptr<Expression>> &expr_list() { return expr_list_; }
+
+  size_t size() const { return expr_list_.size(); }
 
 private:
   Table      *table_        = nullptr;
-  Value       value_;
-  Field       field_;
+  std::vector<FieldMeta>                   field_list_;
+  std::vector<std::unique_ptr<Expression>> expr_list_;
   FilterStmt *filter_stmt_  = nullptr;
 };
