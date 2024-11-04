@@ -677,14 +677,66 @@ RC Table::delete_record(const Record &record)
   return rc;
 }
 
-RC Table::update_record(Record &record, Field const &field, Value const &value) {
+/*
+RC Table::update_record(Record &record, FieldMeta const &field, Value const &value) {
   RC rc = RC::SUCCESS;
 
-  ASSERT(field.table() == this && table_meta_.field(field.meta()->name()) != nullptr,
-         "Field not belong to this table: %s:%s", field.table_name(), field.meta()->name());
-
   const int sys_field_num = table_meta_.sys_field_num();
-  const int field_index = field.meta()->field_id() + sys_field_num;
+  const int field_index = field.field_id() + sys_field_num;
+
+  // pre-update stage: record value has not been modified
+  rc = delete_entry_of_indexes(record.data(), record.rid(), false);
+  if (OB_FAIL(rc)) {
+    LOG_ERROR("failed to delete index of record: %s", strrc(rc));
+    return rc;
+  }
+
+  // update stage
+  const FieldMeta *null_bitmap_field = table_meta_.null_field();
+  common::Bitmap null_bitmap(record.data() + null_bitmap_field->offset(), null_bitmap_field->len());
+  if (value.attr_type() == AttrType::NULLS) {
+    null_bitmap.set_bit(field_index);
+  } else {
+    if (field.type() == value.attr_type()
+        || (field.nullable() && value.attr_type() == AttrType::NULLS)
+        || (field.type() == AttrType::DATES && value.attr_type() == AttrType::CHARS)
+        || (field.type() == AttrType::TEXTS && value.attr_type() == AttrType::CHARS)) {
+      rc = set_value_to_record(record.data(), value, &field);
+    } else {
+      Value real_value;
+      rc = Value::cast_to(value, field.type(), real_value);
+      if (OB_FAIL(rc)) {
+        LOG_WARN("update value failed to cast value. table name:%s, field name:%s, value:%s ",
+            table_meta_.name(), field.name(), value.to_string().c_str());
+        return RC::INVALID_ARGUMENT;
+      } else {
+        rc = set_value_to_record(record.data(), real_value, &field);
+      }
+    }
+  }
+
+  // pro-update stage
+  if (find_index_by_field(field.field_name())) {
+    rc = insert_entry_of_indexes(record.data(), record.rid());
+    if (OB_FAIL(rc)) {
+      LOG_ERROR("failed to insert index: %s", strrc(rc));
+      return rc;
+    }
+  }
+
+  rc = record_handler_->update_record(record.data(), &record.rid());
+  if (OB_FAIL(rc)) {
+    LOG_ERROR("failed to update record: %s", strrc(rc));
+    return rc;
+  }
+
+  return RC::SUCCESS;
+}
+*/
+
+RC Table::update_record(Record &record, Record const &new_record)
+{
+  RC rc = RC::SUCCESS;
 
   // pre-update stage: record value has not been modified
   /*
@@ -696,25 +748,6 @@ RC Table::update_record(Record &record, Field const &field, Value const &value) 
   */
 
   // update stage
-  const FieldMeta *null_bitmap_field = table_meta_.null_field();
-  common::Bitmap null_bitmap(record.data() + null_bitmap_field->offset(), null_bitmap_field->len());
-  if (value.attr_type() == AttrType::NULLS) {
-    null_bitmap.set_bit(field_index);
-  } else {
-    if (field.meta()->type() == value.attr_type() || (field.meta()->type() == AttrType::TEXTS && value.attr_type() == AttrType::CHARS)) {
-      rc = set_value_to_record(record.data(), value, field.meta());
-    } else {
-      Value real_value;
-      rc = Value::cast_to(value, field.meta()->type(), real_value);
-      if (OB_FAIL(rc)) {
-        LOG_WARN("failed to cast value. table name:%s,field name:%s,value:%s ",
-            table_meta_.name(), field.meta()->name(), value.to_string().c_str());
-      } else {
-        rc = set_value_to_record(record.data(), real_value, field.meta());
-      }
-    }
-  }
-
   // pro-update stage
   /*
   if (find_index_by_field(field.field_name())) {
@@ -725,8 +758,7 @@ RC Table::update_record(Record &record, Field const &field, Value const &value) 
     }
   }
   */
-
-  rc = record_handler_->update_record(record.data(), &record.rid());
+  rc = record_handler_->update_record(new_record);
   if (OB_FAIL(rc)) {
     LOG_ERROR("failed to update record: %s", strrc(rc));
     return rc;

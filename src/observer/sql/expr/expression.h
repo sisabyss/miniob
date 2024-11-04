@@ -491,6 +491,7 @@ private:
 class SelectStmt;
 class LogicalOperator;
 class PhysicalOperator;
+class ValueListTuple;
 class SubQueryExpr : public Expression
 {
 public:
@@ -499,7 +500,7 @@ public:
 
   RC open(Trx* trx) override;
   RC close() override;
-  uint64_t size() const { return size_; }
+  uint64_t size() const;
   bool has_multi_valued() const override;
   RC get_value(const Tuple &tuple, Value &value) const override;
 
@@ -515,8 +516,9 @@ private:
   RC build_physical_oper();
 
 private:
-  AttrType value_type_ = AttrType::UNDEFINED;
-  uint64_t size_ = 0;
+  std::vector<ValueListTuple> tuple_list_;
+  mutable std::vector<ValueListTuple>::iterator it_;
+  AttrType value_type_;
 
   std::unique_ptr<SelectSqlNode> sql_node_;
   std::unique_ptr<SelectStmt> stmt_;

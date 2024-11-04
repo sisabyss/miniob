@@ -126,6 +126,7 @@ UnboundAggregateExpr *create_aggregate_expression(const char *aggregate_name,
         NOT
         LIKE
         IN
+        AS
         EXISTS
         NULL_SYM
         NULLABLE_SYM
@@ -145,6 +146,8 @@ UnboundAggregateExpr *create_aggregate_expression(const char *aggregate_name,
   AttrInfoSqlNode *                          attr_info;
   Expression *                               expression;
   std::vector<std::unique_ptr<Expression>> * expression_list;
+  UpdateElem *                               update_elem;
+  std::vector<UpdateElem> *                  update_list;
   std::vector<Value> *                       value_list;
   std::vector<ConditionSqlNode> *            condition_list;
   std::vector<RelAttrSqlNode> *              rel_attr_list;
@@ -189,8 +192,11 @@ UnboundAggregateExpr *create_aggregate_expression(const char *aggregate_name,
 %type <expression>          subquery_expr
 %type <expression_list>     expression_list
 %type <expression_list>     group_by
+%type <update_elem>         update_elem
+%type <update_list>         update_list
 %type <bools>               opt_unique
 %type <bools>               opt_null;
+%type <bools>               opt_as;
 %type <id_list>             ID_list;
 %type <sql_node>            calc_stmt
 %type <sql_node>            select_stmt
@@ -381,6 +387,40 @@ create_table_stmt:    /*create table 语句的语法解析树*/
         free($8);
       }
     }
+    | CREATE TABLE ID LBRACE attr_def attr_def_list RBRACE opt_as select_stmt
+    {
+      $$ = $9;
+      $$->flag = SCF_CREATE_TABLE;
+      CreateTableSqlNode &create_table = $$->create_table;
+      create_table.relation_name = $3;
+      free($3);
+
+      std::vector<AttrInfoSqlNode> *src_attrs = $6;
+      if (src_attrs != nullptr) {
+        create_table.attr_infos.swap(*src_attrs);
+      }
+      create_table.attr_infos.emplace_back(*$5);
+      std::reverse(create_table.attr_infos.begin(), create_table.attr_infos.end());
+      delete $5;
+    }
+    | CREATE TABLE ID opt_as select_stmt
+    {
+      $$ = $5;
+      $$->flag = SCF_CREATE_TABLE;
+      CreateTableSqlNode &create_table = $$->create_table;
+      create_table.relation_name = $3;
+      free($3);
+    }
+    ;
+opt_as:
+    /* empty */
+    {
+      $$ = false;
+    }
+    | AS
+    {
+      $$ = false;
+    }
     ;
 attr_def_list:
     /* empty */
@@ -545,21 +585,48 @@ delete_stmt:    /*  delete 语句的语法解析树*/
     }
     ;
 update_stmt:      /*  update 语句的语法解析树*/
-    UPDATE ID SET ID EQ value where 
+    UPDATE ID SET update_list where
     {
       $$ = new ParsedSqlNode(SCF_UPDATE);
       $$->update.relation_name = $2;
-      $$->update.attribute_name = $4;
-      $$->update.value = *$6;
-      if ($7 != nullptr) {
-        $$->update.conditions.swap(*$7);
-        delete $7;
+      for (auto &&elem : *$4) {
+        $$->update.attr_list.emplace_back(std::move(elem.attr_name));
+        $$->update.expr_list.emplace_back(std::move(elem.expr));
+      }
+      if ($5 != nullptr) {
+        $$->update.conditions.swap(*$5);
+        delete $5;
       }
       free($2);
-      free($4);
-      delete $6;
+      delete $4;
     }
     ;
+update_list:
+    update_elem {
+      $$ = new std::vector<UpdateElem>;
+      $$->emplace_back(std::move(*$1));
+      delete $1;
+    }
+    | update_elem COMMA update_list {
+      if ($3 != nullptr) {
+        $$ = $3;
+      } else {
+        $$ = new std::vector<UpdateElem>;
+      }
+      $$->emplace($$->begin(), std::move(*$1));
+      delete $1;
+    }
+    ;
+update_elem:
+    ID EQ expression
+    {
+      $$ = new UpdateElem;
+      $$->attr_name = $1;
+      $$->expr.reset($3);
+      free($1);
+    }
+    ;
+
 subquery_expr:
     LBRACE select_stmt RBRACE
     {

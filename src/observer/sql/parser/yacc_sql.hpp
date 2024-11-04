@@ -115,16 +115,17 @@ extern int yydebug;
     NOT = 316,                     /* NOT  */
     LIKE = 317,                    /* LIKE  */
     IN = 318,                      /* IN  */
-    EXISTS = 319,                  /* EXISTS  */
-    NULL_SYM = 320,                /* NULL_SYM  */
-    NULLABLE_SYM = 321,            /* NULLABLE_SYM  */
-    ORDER = 322,                   /* ORDER  */
-    ASC = 323,                     /* ASC  */
-    NUMBER = 324,                  /* NUMBER  */
-    FLOAT = 325,                   /* FLOAT  */
-    ID = 326,                      /* ID  */
-    SSS = 327,                     /* SSS  */
-    UMINUS = 328                   /* UMINUS  */
+    AS = 319,                      /* AS  */
+    EXISTS = 320,                  /* EXISTS  */
+    NULL_SYM = 321,                /* NULL_SYM  */
+    NULLABLE_SYM = 322,            /* NULLABLE_SYM  */
+    ORDER = 323,                   /* ORDER  */
+    ASC = 324,                     /* ASC  */
+    NUMBER = 325,                  /* NUMBER  */
+    FLOAT = 326,                   /* FLOAT  */
+    ID = 327,                      /* ID  */
+    SSS = 328,                     /* SSS  */
+    UMINUS = 329                   /* UMINUS  */
   };
   typedef enum yytokentype yytoken_kind_t;
 #endif
@@ -133,7 +134,7 @@ extern int yydebug;
 #if ! defined YYSTYPE && ! defined YYSTYPE_IS_DECLARED
 union YYSTYPE
 {
-#line 136 "yacc_sql.y"
+#line 137 "yacc_sql.y"
 
   ParsedSqlNode *                            sql_node;
   ConditionSqlNode *                         condition;
@@ -146,6 +147,8 @@ union YYSTYPE
   AttrInfoSqlNode *                          attr_info;
   Expression *                               expression;
   std::vector<std::unique_ptr<Expression>> * expression_list;
+  UpdateElem *                               update_elem;
+  std::vector<UpdateElem> *                  update_list;
   std::vector<Value> *                       value_list;
   std::vector<ConditionSqlNode> *            condition_list;
   std::vector<RelAttrSqlNode> *              rel_attr_list;
@@ -156,7 +159,7 @@ union YYSTYPE
   float                                      floats;
   bool                                       bools;
 
-#line 160 "yacc_sql.hpp"
+#line 163 "yacc_sql.hpp"
 
 };
 typedef union YYSTYPE YYSTYPE;

@@ -90,7 +90,7 @@ public:
   RC insert_record(Record &record);
   RC delete_record(const Record &record);
   RC delete_record(const RID &rid);
-  RC update_record(Record &record, Field const &field, Value const &value);
+  RC update_record(Record &record, Record const &new_record);
   RC get_record(const RID &rid, Record &record);
 
   /**
@@ -132,6 +132,8 @@ public:
 private:
   RC insert_entry_of_indexes(const char *record, const RID &rid);
   RC delete_entry_of_indexes(const char *record, const RID &rid, bool error_on_not_exists);
+
+public:
   RC set_value_to_record(char *record_data, const Value &value, const FieldMeta *field);
 
 private:

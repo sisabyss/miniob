@@ -128,6 +128,7 @@ GROUP                                   RETURN_TOKEN(GROUP);
 BY                                      RETURN_TOKEN(BY);
 LIKE                                    RETURN_TOKEN(LIKE);
 IN                                      RETURN_TOKEN(IN);
+AS                                      RETURN_TOKEN(AS);
 EXISTS                                  RETURN_TOKEN(EXISTS);
 IS                                      RETURN_TOKEN(IS_SYM);
 NOT                                     RETURN_TOKEN(NOT);

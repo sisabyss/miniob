@@ -12,10 +12,10 @@ See the Mulan PSL v2 for more details. */
 #define UPDATE_PHYSICAL_OPERATOR_H_
 
 #include "sql/operator/physical_operator.h"
-#include "storage/field/field.h"
 
 class UpdateStmt;
 class Record;
+class FieldMeta;
 
 /**
  * @brief 更新物理算子
@@ -24,7 +24,11 @@ class Record;
 class UpdatePhysicalOperator : public PhysicalOperator
 {
 public:
-  UpdatePhysicalOperator(Table *table, Value &&value, Field &&field);
+  UpdatePhysicalOperator(
+    Table *table,
+    std::vector<std::unique_ptr<Expression>>&& expr_list,
+    std::vector<FieldMeta> &&field_list
+  );
   virtual ~UpdatePhysicalOperator() = default;
 
   PhysicalOperatorType type() const override { return PhysicalOperatorType::UPDATE; }
@@ -35,11 +39,19 @@ public:
   Tuple *current_tuple() override { return nullptr; }
 
 private:
+  RC set_expr_to_record(
+    std::unique_ptr<Expression> const &expr,
+    FieldMeta const &field,
+    const Tuple *tuple,
+    Record &record
+);
+
+private:
   Table              *table_ = nullptr;
   Trx                *trx_   = nullptr;
-  Value               value_;
-  Field               field_;
-  std::vector<Record> records_;
+
+  std::vector<std::unique_ptr<Expression>> expr_list_;
+  std::vector<FieldMeta>                   field_list_;
 };
 
 

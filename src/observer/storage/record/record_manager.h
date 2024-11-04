@@ -197,10 +197,9 @@ public:
   virtual RC delete_record(const RID *rid) { return RC::UNIMPLEMENTED; }
 
   /**
-   * @brief
-   *
+   * @brief 更新指定的记录
    */
-  virtual RC update_record(const RID &rid, const char *data) { return RC::UNIMPLEMENTED; }
+  virtual RC update_record(const Record &record) { return RC::UNIMPLEMENTED; }
 
   /**
    * @brief 获取指定位置的记录数据
@@ -288,7 +287,7 @@ public:
 
   virtual RC delete_record(const RID *rid) override;
 
-  virtual RC update_record(const RID &rid, const char *data) override;
+  virtual RC update_record(const Record &record) override;
 
   /**
    * @brief 获取指定位置的记录数据
@@ -394,7 +393,7 @@ public:
    * @param data        纪录内容
    * @param rid         待更新记录的标识符
    */
-  RC update_record(const char *data, RID *rid);
+  RC update_record(const Record &rid);
 
   /**
    * @brief 数据库恢复时，在指定文件指定位置插入数据

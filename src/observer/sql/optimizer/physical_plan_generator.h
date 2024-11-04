@@ -22,6 +22,7 @@ See the Mulan PSL v2 for more details. */
 class TableGetLogicalOperator;
 class PredicateLogicalOperator;
 class OrderLogicalOperator;
+class CreateTableLogicalOperator;
 class ProjectLogicalOperator;
 class InsertLogicalOperator;
 class DeleteLogicalOperator;
@@ -58,6 +59,7 @@ private:
   RC create_plan(CalcLogicalOperator &logical_oper, std::unique_ptr<PhysicalOperator> &oper);
   RC create_plan(GroupByLogicalOperator &logical_oper, std::unique_ptr<PhysicalOperator> &oper);
   RC create_plan(OrderLogicalOperator &order_oper, unique_ptr<PhysicalOperator> &oper);
+  RC create_plan(CreateTableLogicalOperator &logical_oper, std::unique_ptr<PhysicalOperator> &oper);
   RC create_vec_plan(ProjectLogicalOperator &logical_oper, std::unique_ptr<PhysicalOperator> &oper);
   RC create_vec_plan(TableGetLogicalOperator &logical_oper, std::unique_ptr<PhysicalOperator> &oper);
   RC create_vec_plan(GroupByLogicalOperator &logical_oper, std::unique_ptr<PhysicalOperator> &oper);

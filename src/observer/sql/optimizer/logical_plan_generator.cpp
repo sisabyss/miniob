@@ -19,6 +19,7 @@ See the Mulan PSL v2 for more details. */
 
 #include "common/type/attr_type.h"
 #include "sql/operator/calc_logical_operator.h"
+#include "sql/operator/create_table_logical_operator.h"
 #include "sql/operator/delete_logical_operator.h"
 #include "sql/operator/explain_logical_operator.h"
 #include "sql/operator/insert_logical_operator.h"
@@ -32,6 +33,7 @@ See the Mulan PSL v2 for more details. */
 
 #include "sql/operator/update_logical_operator.h"
 #include "sql/stmt/calc_stmt.h"
+#include "sql/stmt/create_table_stmt.h"
 #include "sql/stmt/delete_stmt.h"
 #include "sql/stmt/explain_stmt.h"
 #include "sql/stmt/filter_stmt.h"
@@ -85,6 +87,12 @@ RC LogicalPlanGenerator::create(Stmt *stmt, unique_ptr<LogicalOperator> &logical
 
       rc = create_plan(explain_stmt, logical_operator);
     } break;
+
+    case StmtType::CREATE_TABLE: {
+      CreateTableStmt *create_table_stmt = static_cast<CreateTableStmt *>(stmt);
+      rc = create_plan(create_table_stmt, logical_operator);
+    } break;
+
     default: {
       rc = RC::UNIMPLEMENTED;
     }
@@ -239,7 +247,7 @@ RC LogicalPlanGenerator::create_plan(UpdateStmt *update_stmt, unique_ptr<Logical
     return rc;
   }
 
-  unique_ptr<LogicalOperator> update_oper(new UpdateLogicalOperator(table, update_stmt->value(), update_stmt->field()));
+  unique_ptr<LogicalOperator> update_oper(new UpdateLogicalOperator(table, std::move(update_stmt->expr_list()), std::move(update_stmt->field_list())));
 
   if (predicate_oper) {
     predicate_oper->add_child(std::move(table_get_oper));
@@ -346,6 +354,32 @@ RC LogicalPlanGenerator::create_group_by_plan(SelectStmt *select_stmt, unique_pt
   logical_operator = std::move(group_by_oper);
   return RC::SUCCESS;
 }
+
+RC LogicalPlanGenerator::create_plan(CreateTableStmt *create_stmt, std::unique_ptr<LogicalOperator> &logical_operator)
+{
+  RC rc = RC::SUCCESS;
+  std::unique_ptr<LogicalOperator> select_oper;
+  Stmt *create_select =  create_stmt->create_select();
+  if (nullptr != create_select) {
+    SelectStmt *select_stmt = static_cast<SelectStmt*>(create_select);
+    rc = create_plan(select_stmt, select_oper);
+    if (RC::SUCCESS != rc) {
+      LOG_WARN("failed to create sub select logical plan, r=%s", strrc(rc));
+      return rc;
+    }
+  }
+
+  logical_operator = std::unique_ptr<LogicalOperator>(new CreateTableLogicalOperator(
+                                                            create_stmt->db(),
+                                                            create_stmt->table_name(),
+                                                            create_stmt->attr_infos(),
+                                                            create_stmt->storage_format()));
+  if (select_oper) {
+    logical_operator->add_child(std::move(select_oper));
+  }
+  return rc;
+}
+
 
 RC LogicalPlanGenerator::create_plan(OrderStmt *order_stmt, unique_ptr<LogicalOperator> &logical_operator)
 {

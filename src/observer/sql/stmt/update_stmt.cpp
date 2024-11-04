@@ -13,15 +13,27 @@ See the Mulan PSL v2 for more details. */
 //
 
 #include "sql/stmt/update_stmt.h"
+#include "common/lang/string.h"
 #include "common/type/attr_type.h"
 #include "common/value.h"
 #include "sql/stmt/filter_stmt.h"
 #include "storage/db/db.h"
 #include "storage/field/field.h"
+#include "storage/table/table_meta.h"
 
-UpdateStmt::UpdateStmt(Table *table, Value value, Field field, FilterStmt *filter_stmt)
-    : table_(table), value_(value), field_(field), filter_stmt_(filter_stmt)
-{}
+
+UpdateStmt::UpdateStmt(
+  Table *table,
+  std::vector<FieldMeta> &&field_list,
+  std::vector<std::unique_ptr<Expression>>&& expr_list,
+  FilterStmt *filter_stmt
+) : table_(table),
+    field_list_(std::move(field_list)),
+    expr_list_(std::move(expr_list)),
+    filter_stmt_(filter_stmt)
+{
+}
+
 
 UpdateStmt::~UpdateStmt()
 {
@@ -31,11 +43,15 @@ UpdateStmt::~UpdateStmt()
   }
 }
 
-RC UpdateStmt::create(const Db *db, const UpdateSqlNode &update, Stmt *&stmt)
+RC UpdateStmt::create(const Db *db, UpdateSqlNode &update, Stmt *&stmt)
 {
   RC rc = RC::SUCCESS;
 
   // collect tables in `from` statement
+  if (common::is_blank(update.relation_name.c_str())) {
+    LOG_WARN("update table name must not be emplty.");
+    return RC::INTERNAL;
+  }
   Table *table = db->find_table(update.relation_name.c_str());
   if (table == nullptr) {
     LOG_WARN("table %s not exists", update.relation_name.c_str());
@@ -45,22 +61,29 @@ RC UpdateStmt::create(const Db *db, const UpdateSqlNode &update, Stmt *&stmt)
   table_map.emplace(update.relation_name, table);
 
   // collect attr field to be updated
-  const FieldMeta *field_meta = table->table_meta().field(update.attribute_name.c_str());
-  if (field_meta == nullptr) {
-    LOG_WARN("field %s not exist in table %s", update.attribute_name.c_str(), update.relation_name.c_str());
-    return RC::SCHEMA_FIELD_NOT_EXIST;
+  std::vector<FieldMeta> fields;
+  const TableMeta &table_meta = table->table_meta();
+  for (auto const &attr : update.attr_list) {
+    const FieldMeta* update_field = table_meta.field(attr.c_str());
+    if (update_field == nullptr) {
+      LOG_WARN("field %s not exist in table %s", attr.c_str(), update.relation_name.c_str());
+      return RC::SCHEMA_FIELD_NOT_EXIST;
+    }
+    fields.push_back(*update_field);
   }
 
-  if (field_meta->type() == update.value.attr_type()
-      || (field_meta->nullable() && update.value.attr_type() == AttrType::NULLS)
-      || (field_meta->type() == AttrType::TEXTS && update.value.attr_type() == AttrType::CHARS)
-      || (field_meta->type() == AttrType::DATES && update.value.attr_type() == AttrType::CHARS)) {
-    /* skip */
-  } else {
-    LOG_WARN("update value failed to cast into target type, src=%s, target=%s",
-        attr_type_to_string(update.value.attr_type()), attr_type_to_string(field_meta->type()));
-    return RC::INVALID_ARGUMENT;
+  // collect and bind expressions to be emplace
+  std::vector<std::unique_ptr<Expression>> exprs;
+
+  BinderContext binder_context(db);
+  binder_context.add_table(table);
+  ExpressionBinder binder(binder_context);
+  for (auto &expr : update.expr_list) {
+    vector<unique_ptr<Expression>> bound_expressions;
+    rc = binder.bind_expression(expr, bound_expressions);
+    exprs.emplace_back(std::move(bound_expressions.front()));
   }
+  update.expr_list.clear();
 
   // create filter statement in `where` statement
   FilterStmt *filter_stmt = nullptr;
@@ -85,9 +108,9 @@ RC UpdateStmt::create(const Db *db, const UpdateSqlNode &update, Stmt *&stmt)
   auto *update_stmt         = new UpdateStmt();
 
   update_stmt->table_       = table;
-  update_stmt->value_       = update.value;
+  update_stmt->expr_list_   = std::move(exprs);
   update_stmt->filter_stmt_ = filter_stmt;
-  update_stmt->field_       = Field(table, field_meta);
+  update_stmt->field_list_  = std::move(fields);
   stmt = update_stmt;
   return RC::SUCCESS;
 }
