@@ -839,11 +839,6 @@ RC SubQueryExpr::build_physical_oper()
   }
   physical_oper_->close();
 
-  if (size() == 0) {
-    LOG_INFO("right-hand expresion must not be empty column");
-    return RC::EMPTY;
-  }
-
   return RC::SUCCESS;
 }
 

@@ -96,18 +96,16 @@ RC UpdatePhysicalOperator::set_expr_to_record(
   const FieldMeta *null_bitmap_field = table_->table_meta().null_field();
   common::Bitmap null_bitmap(record.data() + null_bitmap_field->offset(), null_bitmap_field->len());
   if (value.attr_type() == AttrType::NULLS) {
-    null_bitmap.set_bit(field_index);
-  } else {
-    if (field.type() == value.attr_type()
-        || (field.nullable() && value.attr_type() == AttrType::NULLS)
-        || (field.type() == AttrType::DATES && value.attr_type() == AttrType::CHARS)
-        || (field.type() == AttrType::TEXTS && value.attr_type() == AttrType::CHARS)) {
-      rc = table_->set_value_to_record(record.data(), value, &field);
+    if (field.nullable()) {
+      null_bitmap.set_bit(field_index);
     } else {
-      LOG_WARN("update value failed to cast into target type, src=%s, target=%s",
-          attr_type_to_string(value.attr_type()), attr_type_to_string(field.type()));
+      LOG_WARN("update value null but field %s is not nullable.", field.name());
       return RC::INVALID_ARGUMENT;
-      /*
+    }
+  } else if (field.type() == value.attr_type()) {
+      rc = table_->set_value_to_record(record.data(), value, &field);
+  } else if ((field.type() == AttrType::DATES && value.attr_type() == AttrType::CHARS)
+          || (field.type() == AttrType::TEXTS && value.attr_type() == AttrType::CHARS)) {
       Value real_value;
       rc = Value::cast_to(value, field.type(), real_value);
       if (OB_FAIL(rc)) {
@@ -117,8 +115,10 @@ RC UpdatePhysicalOperator::set_expr_to_record(
       } else {
         rc = table_->set_value_to_record(record.data(), real_value, &field);
       }
-      */
-    }
+  } else {
+    LOG_WARN("update value failed to cast into target type, src=%s, target=%s",
+        attr_type_to_string(value.attr_type()), attr_type_to_string(field.type()));
+    return RC::INVALID_ARGUMENT;
   }
   return rc;
 }
