@@ -247,7 +247,12 @@ public:
   RC spec_at(int index, TupleCellSpec &spec) const override
   {
     const Field &field = speces_[index]->field();
-    spec               = TupleCellSpec(table_->name(), field.field_name());
+    const auto  *expr  = speces_[index];
+    if (expr->alias().empty()) {
+      spec               = TupleCellSpec(table_->name(), field.field_name());
+    } else {
+      spec               = TupleCellSpec(table_->name(), field.field_name(), expr->alias().data());
+    }
     return RC::SUCCESS;
   }
 
@@ -332,7 +337,12 @@ public:
 
   RC spec_at(int index, TupleCellSpec &spec) const override
   {
-    spec = TupleCellSpec(expressions_[index]->name());
+    auto const &expr = expressions_[index];
+    if (expr->alias().empty()) {
+      spec = TupleCellSpec(expr->name());
+    } else {
+      spec = TupleCellSpec(expr->alias());
+    }
     return RC::SUCCESS;
   }
 

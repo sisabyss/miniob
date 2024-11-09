@@ -79,12 +79,20 @@ struct ConditionSqlNode
 };
 
 /**
+ * @brief 描述一个关系引用
+ */
+struct RelationRef {
+  std::string  relation;   ///< 查询的表
+  std::string  alias;      ///< 表的别名
+};
+
+/**
  * @brief 表示表引用的集合
  * @ingroup SQLParser
  */
 struct TableRefSqlNode
 {
-  std::vector<std::string>                 relations;    ///< 查询的表
+  std::vector<RelationRef>                 relations;    ///< 查询的表
   std::vector<ConditionSqlNode>            conditions;   ///< join on语句的查询条件
 };
 
@@ -113,7 +121,7 @@ struct OrderSqlNode
 struct SelectSqlNode
 {
   std::vector<std::unique_ptr<Expression>> expressions;  ///< 查询的表达式
-  std::vector<std::string>                 relations;    ///< 查询的表
+  std::vector<RelationRef>                 relations;    ///< 查询的表
   std::vector<ConditionSqlNode>            conditions;   ///< 查询条件，使用AND串联起来多个条件
   std::vector<std::unique_ptr<Expression>> group_by;     ///< group by clause
   std::vector<OrderSqlNode>                order_sql_nodes;

@@ -153,6 +153,7 @@ UnboundAggregateExpr *create_aggregate_expression(const char *aggregate_name,
   std::vector<RelAttrSqlNode> *              rel_attr_list;
   TableRefSqlNode *                          table_ref_list;
   std::vector<std::string> *                 id_list;
+  RelationRef *                              relation_ref;
   char *                                     string;
   int                                        number;
   float                                      floats;
@@ -173,7 +174,8 @@ UnboundAggregateExpr *create_aggregate_expression(const char *aggregate_name,
 %type <condition>           condition
 %type <value>               value
 %type <number>              number
-%type <string>              relation
+%type <relation_ref>        relation
+%type <string>              opt_alias
 %type <comp>                comp_op
 %type <comp>                is_null_comp;
 %type <comp>                xst_comp;
@@ -744,17 +746,25 @@ calc_stmt:
     ;
 
 expression_list:
-    expression
+    expression opt_alias
     {
       $$ = new std::vector<std::unique_ptr<Expression>>;
+      if ($2 != nullptr) {
+        $1->set_alias($2);
+        free($2);
+      }
       $$->emplace_back($1);
     }
-    | expression COMMA expression_list
+    | expression opt_alias COMMA expression_list
     {
-      if ($3 != nullptr) {
-        $$ = $3;
+      if ($4 != nullptr) {
+        $$ = $4;
       } else {
         $$ = new std::vector<std::unique_ptr<Expression>>;
+      }
+      if ($2 != nullptr) {
+        $1->set_alias($2);
+        free($2);
       }
       $$->emplace($$->begin(), $1);
     }
@@ -805,6 +815,7 @@ expression:
     }
     | subquery_expr {
       $$ = $1;
+      $$->set_name(token_name(sql_string, &@$));
     }
     ;
 aggr_expr:
@@ -861,10 +872,26 @@ rel_attr:
       free($3);
     }
     ;
-
-relation:
-    ID {
+opt_alias:
+    /* empty */ {
+      $$ = nullptr;
+    }
+    | ID {
       $$ = $1;
+    }
+    | AS ID {
+      $$ = $2;
+    }
+    ;
+relation:
+    ID opt_alias {
+      $$ = new RelationRef;
+      $$->relation = $1;
+      if ($2 != nullptr) {
+        $$->alias = $2;
+        free($2);
+      }
+      free($1);
     }
     ;
 table_ref_list:
@@ -878,8 +905,8 @@ table_ref_list:
 comma_ref_list:
     relation {
       $$ = new TableRefSqlNode();
-      $$->relations.push_back($1);
-      free($1);
+      $$->relations.push_back(*$1);
+      delete $1;
     }
     | relation COMMA table_ref_list {
       if ($3 != nullptr) {
@@ -888,18 +915,18 @@ comma_ref_list:
         $$ = new TableRefSqlNode();
       }
 
-      $$->relations.insert($$->relations.begin(), $1);
-      free($1);
+      $$->relations.insert($$->relations.begin(), *$1);
+      delete $1;
     }
     ;
 join_ref_list:
     relation INNER JOIN relation ON condition_list {
       $$ = new TableRefSqlNode();
 
-      $$->relations.push_back($1);  // 左侧的relation
-      $$->relations.push_back($4);  // 右侧的relation
-      free($1);
-      free($4);
+      $$->relations.push_back(*$1);  // 左侧的relation
+      $$->relations.push_back(*$4);  // 右侧的relation
+      delete $1;
+      delete $4;
 
       // 将ON条件存储为 conditions
       if ($6 != nullptr) {
@@ -915,8 +942,8 @@ join_ref_list:
         $$ = new TableRefSqlNode();
       }
 
-      $$->relations.push_back($4);  // 右侧的relation
-      free($4);
+      $$->relations.push_back(*$4);  // 右侧的relation
+      delete $4;
 
       // 将ON条件存储为 conditions
       if ($6 != nullptr) {
