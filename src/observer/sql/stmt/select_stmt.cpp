@@ -157,6 +157,7 @@ RC SelectStmt::check_alias(
 ) {
   std::unordered_set<std::string> table_alias_set; // 检测表别名重复
   for (auto const &table_ref : table_list) {
+    if (table_ref.alias.empty()) continue;
     if (table_alias_set.count(table_ref.alias) != 0) {
       return RC::INVALID_ARGUMENT;
     }

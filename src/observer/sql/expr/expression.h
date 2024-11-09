@@ -225,7 +225,7 @@ public:
   const Field &field() const { return field_; }
 
   const char *table_name() const { return field_.table_name(); }
-  const char *table_alias() const { return table_alias_.c_str(); }
+  std::string const &table_alias() const { return table_alias_; }
   const char *field_name() const { return field_.field_name(); }
 
   void set_table_alias(std::string const &alias) { table_alias_ = alias; }

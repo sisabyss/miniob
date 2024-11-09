@@ -90,8 +90,8 @@ RC ProjectPhysicalOperator::tuple_schema(TupleSchema &schema) const
         if (is_mult_table) {
           // Avoid extra allocation by using string_view
           std::string name;
-          if (fieldPtr->table_alias()) {
-            name = std::string(fieldPtr->table_alias()) + "." + fieldPtr->field_name();
+          if (!fieldPtr->table_alias().empty()) {
+            name = fieldPtr->table_alias() + "." + fieldPtr->field_name();
           } else {
             name = std::string(fieldPtr->table_name()) + "." + fieldPtr->field_name();
           }
