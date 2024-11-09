@@ -27,12 +27,20 @@ using namespace common;
 
 Table *BinderContext::find_table(const char *table_name) const
 {
-  auto pred = [table_name](Table *table) { return 0 == strcasecmp(table_name, table->name()); };
-  auto iter = ranges::find_if(query_tables_, pred);
-  if (iter == query_tables_.end()) {
+  auto iter = query_table_map_.find(table_name);
+  if (iter == query_table_map_.end()) {
     return nullptr;
   }
-  return *iter;
+  return iter->second;
+}
+
+const char *BinderContext::find_table_alias(const char *table_name) const
+{
+  auto iter = alias_map_.find(table_name);
+  if (iter == alias_map_.end()) {
+    return nullptr;
+  }
+  return iter->second.c_str();
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -156,6 +164,7 @@ RC ExpressionBinder::bind_unbound_field_expression(
 
   const char *table_name = unbound_field_expr->table_name();
   const char *field_name = unbound_field_expr->field_name();
+  auto const &alias_name = unbound_field_expr->alias();
 
   Table *table = nullptr;
   if (is_blank(table_name)) {
@@ -185,6 +194,12 @@ RC ExpressionBinder::bind_unbound_field_expression(
     Field      field(table, field_meta);
     FieldExpr *field_expr = new FieldExpr(field);
     field_expr->set_name(field_name);
+    if (auto *table_alias = context_.find_table_alias(table_name)) {//; table_alias != nullptr) {
+      field_expr->set_table_alias(table_alias);
+    } else {
+      field_expr->set_table_alias(table_name);
+    }
+    if (!alias_name.empty()) field_expr->set_alias(alias_name);
     bound_expressions.emplace_back(field_expr);
   }
 

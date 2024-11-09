@@ -85,16 +85,25 @@ RC ProjectPhysicalOperator::tuple_schema(TupleSchema &schema) const
 
   // Second pass: Construct schema based on table count
   for (const auto &expression : expressions_) {
-    if (FieldExpr* fieldPtr = get_field_expr(expression)) {
-      if (is_mult_table) {
-        // Avoid extra allocation by using string_view
-        std::string name = std::string(fieldPtr->table_name()) + "." + fieldPtr->field_name();
-        schema.append_cell(name.data());
+    if (expression->alias().empty()) {
+      if (FieldExpr* fieldPtr = get_field_expr(expression)) {
+        if (is_mult_table) {
+          // Avoid extra allocation by using string_view
+          std::string name;
+          if (fieldPtr->table_alias()) {
+            name = std::string(fieldPtr->table_alias()) + "." + fieldPtr->field_name();
+          } else {
+            name = std::string(fieldPtr->table_name()) + "." + fieldPtr->field_name();
+          }
+          schema.append_cell(name.data());
+        } else {
+          schema.append_cell(fieldPtr->field_name());
+        }
       } else {
-        schema.append_cell(fieldPtr->field_name());
+        schema.append_cell(expression->name());
       }
     } else {
-      schema.append_cell(expression->name());
+      schema.append_cell(expression->alias().data());
     }
   }
 

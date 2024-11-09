@@ -48,7 +48,11 @@ public:
     }
 
     const ExprPointerType &expression = expressions_[index];
-    spec                              = TupleCellSpec(expression->name());
+    if (expression->alias().empty()) {
+      spec                              = TupleCellSpec(expression->name());
+    } else {
+      spec                              = TupleCellSpec(expression->alias());
+    }
     return RC::SUCCESS;
   }
 

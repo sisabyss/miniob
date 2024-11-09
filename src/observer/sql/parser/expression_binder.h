@@ -21,18 +21,34 @@ See the Mulan PSL v2 for more details. */
 class BinderContext
 {
 public:
+  using tablemap_t = std::unordered_map<std::string, Table *>;
+  using aliasmap_t = std::unordered_map<std::string, std::string>;
+  using tablenode_t = std::pair<std::string, Table *>;
+  using aliasnode_t = std::pair<std::string, std::string>;
   BinderContext(const Db *db) : query_db_(db) {};
   virtual ~BinderContext() = default;
 
-  void add_table(Table *table) { query_tables_.push_back(table); }
+  void add_table(tablenode_t const &table)
+  {
+    query_tables_.push_back(table.second);
+    query_table_map_.insert(table);
+  }
+  void add_table(std::string const &alias, Table *table) { add_table({alias, table}); }
+
+  void add_alias(aliasnode_t const &alias) { alias_map_.insert(alias); }
+  void add_alias(std::string table, std::string const &alias) { add_alias({table, alias}); }
 
   Table *find_table(const char *table_name) const;
+  const char *find_table_alias(const char *table_name) const;
 
   const Db *query_db() const { return query_db_; }
+  const tablemap_t &query_table_map() const { return query_table_map_; }
   const std::vector<Table *> &query_tables() const { return query_tables_; }
 
 private:
-  const Db            *query_db_;
+  const Db  *query_db_;
+  tablemap_t query_table_map_;
+  aliasmap_t alias_map_;
   std::vector<Table *> query_tables_;
 };
 

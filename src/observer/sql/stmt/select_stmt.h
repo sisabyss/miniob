@@ -18,6 +18,7 @@ See the Mulan PSL v2 for more details. */
 #include <vector>
 
 #include "common/rc.h"
+#include "sql/parser/parse_defs.h"
 #include "sql/stmt/stmt.h"
 #include "storage/field/field.h"
 
@@ -56,4 +57,10 @@ private:
   FilterStmt                              *filter_stmt_ = nullptr;
   OrderStmt                               *orders_by_ = nullptr;
   std::vector<std::unique_ptr<Expression>> group_by_;
+
+private:
+  static RC check_alias(
+    std::vector<RelationRef> const &table_list,
+    std::vector<std::unique_ptr<Expression>> const &expr_list
+  );
 };

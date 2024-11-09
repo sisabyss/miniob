@@ -15,6 +15,7 @@ See the Mulan PSL v2 for more details. */
 #include "sql/stmt/select_stmt.h"
 #include "common/lang/string.h"
 #include "common/log/log.h"
+#include "common/rc.h"
 #include "sql/stmt/filter_stmt.h"
 #include "sql/stmt/order_stmt.h"
 #include "storage/db/db.h"
@@ -47,25 +48,40 @@ RC SelectStmt::create(const Db *db, SelectSqlNode &select_sql, Stmt *&stmt)
 
   BinderContext binder_context(db);
 
+  // check alias frist
+  rc = check_alias(select_sql.relations, select_sql.expressions);
+  if (OB_FAIL(rc)) {
+    LOG_INFO("alias check error, strrc:%s", strrc(rc));
+    return rc;
+  }
+
   // collect tables in `from` statement
   vector<Table *>                tables;
   unordered_map<string, Table *> table_map;
   for (size_t i = 0; i < select_sql.relations.size(); i++) {
-    const char *table_name = select_sql.relations[i].c_str();
-    if (nullptr == table_name) {
+    const string &table_name = select_sql.relations[i].relation;
+    if (nullptr == table_name.c_str()) {
       LOG_WARN("invalid argument. relation name is null. index=%d", i);
       return RC::INVALID_ARGUMENT;
     }
 
-    Table *table = db->find_table(table_name);
+    Table *table = db->find_table(table_name.c_str());
     if (nullptr == table) {
-      LOG_WARN("no such table. db=%s, table_name=%s", db->name(), table_name);
+      LOG_WARN("no such table. db=%s, table_name=%s", db->name(), table_name.c_str());
       return RC::SCHEMA_TABLE_NOT_EXIST;
     }
 
-    binder_context.add_table(table);
+    binder_context.add_table(table_name, table);
     tables.push_back(table);
     table_map.insert({table_name, table});
+
+    // handle table alias
+    const string &table_alias = select_sql.relations[i].alias;
+    if (!table_alias.empty()) {
+      binder_context.add_table(table_alias, table);
+      binder_context.add_alias(table_name, table_alias);
+      table_map.insert({table_alias, table});
+    }
   }
 
   // collect query fields in `select` statement
@@ -97,15 +113,8 @@ RC SelectStmt::create(const Db *db, SelectSqlNode &select_sql, Stmt *&stmt)
   // create filter statement in `where` statement
   FilterStmt *filter_stmt = nullptr;
   if (!select_sql.conditions.empty()) {
-    // init binder context
-    BinderContext binder_ctx(db);
-    for (auto *table : tables) {
-      binder_ctx.add_table(table);
-    }
-    ExpressionBinder binder(binder_ctx);
-
     rc          = FilterStmt::create(
-        binder,
+        expression_binder,
         select_sql.conditions.data(),
         static_cast<int>(select_sql.conditions.size()),
         filter_stmt);
@@ -139,5 +148,20 @@ RC SelectStmt::create(const Db *db, SelectSqlNode &select_sql, Stmt *&stmt)
   select_stmt->group_by_.swap(group_by_expressions);
   select_stmt->orders_by_   = order_stmt;
   stmt                      = select_stmt;
+  return RC::SUCCESS;
+}
+
+RC SelectStmt::check_alias(
+  std::vector<RelationRef> const &table_list,
+  std::vector<std::unique_ptr<Expression>> const &expr_list
+) {
+  std::unordered_set<std::string> table_alias_set; // 检测表别名重复
+  for (auto const &table_ref : table_list) {
+    if (table_alias_set.count(table_ref.alias) != 0) {
+      return RC::INVALID_ARGUMENT;
+    }
+    table_alias_set.insert(table_ref.alias);
+  }
+  /* Maybe unused */(void)expr_list;
   return RC::SUCCESS;
 }

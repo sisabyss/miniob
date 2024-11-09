@@ -76,7 +76,7 @@ RC UpdateStmt::create(const Db *db, UpdateSqlNode &update, Stmt *&stmt)
   std::vector<std::unique_ptr<Expression>> exprs;
 
   BinderContext binder_context(db);
-  binder_context.add_table(table);
+  binder_context.add_table(update.relation_name, table);
   ExpressionBinder binder(binder_context);
   for (auto &expr : update.expr_list) {
     vector<unique_ptr<Expression>> bound_expressions;
@@ -89,10 +89,6 @@ RC UpdateStmt::create(const Db *db, UpdateSqlNode &update, Stmt *&stmt)
   FilterStmt *filter_stmt = nullptr;
 
   if (!update.conditions.empty()) {
-    BinderContext binder_context(db);
-    binder_context.add_table(table);
-    ExpressionBinder binder(binder_context);
-
     rc          = FilterStmt::create(
         binder,
         update.conditions.data(),

@@ -131,6 +131,12 @@ public:
   virtual void        set_name(std::string name) { name_ = name; }
 
   /**
+   * @brief 表达式的别名
+   */
+  virtual const std::string &alias() const { return alias_; }
+  virtual void        set_alias(std::string alias) { alias_ = alias; }
+
+  /**
    * @brief 表达式在下层算子返回的 chunk 中的位置
    */
   virtual int  pos() const { return pos_; }
@@ -152,6 +158,7 @@ protected:
 
 private:
   std::string name_;
+  std::string alias_;
 };
 
 class StarExpr : public Expression
@@ -218,7 +225,10 @@ public:
   const Field &field() const { return field_; }
 
   const char *table_name() const { return field_.table_name(); }
+  const char *table_alias() const { return table_alias_.c_str(); }
   const char *field_name() const { return field_.field_name(); }
+
+  void set_table_alias(std::string const &alias) { table_alias_ = alias; }
 
   RC get_column(Chunk &chunk, Column &column) override;
 
@@ -226,6 +236,7 @@ public:
 
 private:
   Field field_;
+  std::string table_alias_;
 };
 
 /**
